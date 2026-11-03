@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signed() { return request.auth != null; }
+    function uref() { return /databases/$(db)/documents/users/$(request.auth.uid); }
+    function active() { return signed() && exists(uref()) && get(uref()).data.active == true; }
+    function admin() { return active() && get(uref()).data.admin == true; }
+    // state after the current write/batch (used for first-run bootstrap)
+    function adminAfter() { return signed() && existsAfter(uref()) && getAfter(uref()).data.active == true && getAfter(uref()).data.admin == true; }
+    function booting() { return !exists(/databases/$(db)/documents/meta/public) && existsAfter(/databases/$(db)/documents/meta/public); }
+
+    match /meta/public {
+      allow read: if true;                       // only {bootstrapped:true}
+      allow create: if signed() && booting() && adminAfter();
+    }
+    match /users/{uid} {
+      allow read: if active() || (signed() && request.auth.uid == uid);
+      allow create: if admin()
+        || (signed() && request.auth.uid == uid && booting()
+            && request.resource.data.admin == true && request.resource.data.active == true);
+      allow update, delete: if admin() && uid != request.auth.uid;   // admin cannot lock himself out
+    }
+    match /config/{d} {                          // BOM + thresholds
+      allow read: if active();
+      allow write: if adminAfter();
+    }
+    match /stock/{d} {
+      allow read: if active();
+      allow create: if adminAfter();
+      allow update: if active();
+    }
+    match /orders/{id} {
+      allow read: if active();
+      allow create: if active() && request.resource.data.uid == request.auth.uid;
+    }
+    match /log/{id} {
+      allow read: if active();
+      allow create: if active() && request.resource.data.uid == request.auth.uid;
+    }
+  }
+}
