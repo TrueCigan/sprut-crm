@@ -79,7 +79,7 @@ function go(v){view=v;render();scrollTo(0,0)}
 function rowP(k,p){return`<div class="row"><span>${esc(p.name)}<br><span class="small">мин. ${D.thr[k]||0} ${esc(p.unit)} · на 1 ант.: ${p.qty}</span></span><span class="${cls(k)}" style="font-size:20px">${D.stock[k]||0} ${esc(p.unit)}</span><button onclick="adjDlg('${k}')">±</button></div>`}
 function invView(){const lowN=allKeys().filter(k=>cls(k)!=='ok').length,t=D.types.find(x=>x.id===invTab);if(!t)invTab='shared';
 return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${t.parts.some(p=>cls(t.id+'|'+p.id)!=='ok')?' ⚠️':''}</button>`).join('')}</div>
-<div class="card"><h2>${t?'Антенна '+esc(t.name):'Общие комплектующие'}</h2>${(t?t.parts.map(p=>rowP(t.id+'|'+p.id,p)):D.shared.map(p=>rowP(p.id,p))).join('')||'<p class="small">Нет деталей</p>'}</div><div id="dlg"></div>`}
+<div class="card"><h2>${t?'Антенна '+esc(t.name):'Общие комплектующие'}</h2>${(t?t.parts.map(p=>rowP(t.id+'|'+p.id,p)):D.shared.map(p=>rowP(p.id,p))).join('')||'<p class="small">Нет деталей</p>'}</div><div class="card"><h2>Экспорт остатков</h2><div class="line"><button id="exp-xlsx" onclick="doExport('xlsx')">📊 Excel</button><button id="exp-pdf" onclick="doExport('pdf')">📄 PDF</button></div><p class="small">Все детали: общие, затем по типам антенн.</p></div><div id="dlg"></div>`}
 function adjDlg(k){$('#dlg').innerHTML=`<div class="card"><h2>${esc(partName(D,k))}</h2><p>Сейчас: <b>${D.stock[k]||0} ${esc(partUnit(D,k))}</b></p><select id="am"><option value="add">Приход (+ к остатку)</option><option value="set">Корректировка (точный остаток)</option></select>
 <input id="av" type="number" inputmode="decimal" placeholder="Количество, ${esc(partUnit(D,k))}"><input id="an" placeholder="Комментарий (необяз.)"><div class="line"><button onclick="$('#dlg').innerHTML=''">Отмена</button><button class="p" onclick="doAdj('${k}')">Сохранить</button></div></div>`;$('#dlg').scrollIntoView()}
 async function doAdj(k){try{await FB.adjust(k,$('#av').value,$('#am').value,$('#an').value.trim());ok('Сохранено')}catch(e){bad(FB.err(e))}render()}
@@ -120,4 +120,5 @@ function exp(){const b=new Blob([JSON.stringify(D,null,1)],{type:'application/js
 function imp(f){if(!f)return;f.text().then(async t=>{const n=JSON.parse(t);if(!n.stock)throw 0;if(confirm('Заменить облачные данные этой копией?')){await FB.importLocal(migrate(n));ok('Импортировано');render()}}).catch(()=>{bad('Неверный файл');render()})}
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
 </script>
+<script src="export.js" charset="utf-8"></script>
 <script type="module" src="db.js"></script></body></html>
