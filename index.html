@@ -27,56 +27,87 @@ const Store={key:'sprut_crm_v1',load(){try{return JSON.parse(localStorage.getIte
 function seed(){const stock={},thr={};const tv={'3-4':[40,20,20],'4-5':[30,15,3],'5-6':[6,10,10],'6-7':[24,12,12],'7-8':[0,4,4],'8-9':[18,9,9]};
 TYPES.forEach(t=>TPARTS.forEach((p,i)=>{stock[t+'|'+p.id]=tv[t][i];thr[t+'|'+p.id]=p.id==='horn'?10:5}));
 Object.assign(stock,{m24:250,cma:12,primer:3000,paint:800});Object.assign(thr,{m24:80,cma:10,primer:1000,paint:1000});
-return{users:[],stock,thr,bom:{horn:2,cup:1,cap:1,m24:8,cma:1,primer:50,paint:50},orders:[],log:[]}}
-function partName(k){const[a,b]=k.split('|');if(b){return TPARTS.find(p=>p.id===b).name+' ('+a+' ГГц)'}return SPARTS.find(p=>p.id===a).name}
-function partUnit(k){const id=k.includes('|')?k.split('|')[1]:k;return([...TPARTS,...SPARTS].find(p=>p.id===id)).unit}
-function requirements(d,lines){const r={};lines.forEach(l=>{const q=+l.qty;if(!(q>0))return;TPARTS.forEach(p=>{const k=l.type+'|'+p.id;r[k]=(r[k]||0)+d.bom[p.id]*q});SPARTS.forEach(p=>{r[p.id]=(r[p.id]||0)+d.bom[p.id]*q})});
-return Object.keys(r).map(k=>({key:k,need:r[k],have:d.stock[k]||0,short:Math.max(0,r[k]-(d.stock[k]||0))}))}
+return migrate({users:[],stock,thr,bom:{horn:2,cup:1,cap:1,m24:8,cma:1,primer:50,paint:50},orders:[],log:[]})}
+function migrate(d){if(!d.types){const b=d.bom||{};d.types=TYPES.map(t=>({id:t,name:t+' ГГц',parts:TPARTS.map(p=>({id:p.id,name:p.name,unit:p.unit,qty:b[p.id]??1}))}));
+d.shared=SPARTS.map(p=>({...p,qty:b[p.id]??1}));delete d.bom}
+d.users=(d.users||[]).map(u=>({login:u.login||u.name,name:u.name||u.login,pw:u.pw,admin:!!u.admin,disabled:!!u.disabled}));d.stock=d.stock||{};d.thr=d.thr||{};d.orders=d.orders||[];d.log=d.log||[];return d}
+const uid=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+function findPart(d,k){const[a,b]=k.split('|');if(b!==undefined){const t=d.types.find(x=>x.id===a);const p=t&&t.parts.find(x=>x.id===b);return{t,p}}return{p:d.shared.find(x=>x.id===a)}}
+function partName(d,k){const{t,p}=findPart(d,k);if(!p)return k+' (удалено)';return p.name+(t?' ('+t.name+')':'')}
+function partUnit(d,k){const{p}=findPart(d,k);return p?p.unit:''}
+function requirements(d,lines){const r={};lines.forEach(l=>{const q=+l.qty;const t=d.types.find(x=>x.id===l.type);if(!(q>0)||!t)return;
+t.parts.forEach(p=>{const k=t.id+'|'+p.id;r[k]=(r[k]||0)+p.qty*q});d.shared.forEach(p=>{r[p.id]=(r[p.id]||0)+p.qty*q})});
+return Object.keys(r).filter(k=>r[k]>0).map(k=>({key:k,need:r[k],have:d.stock[k]||0,short:Math.max(0,r[k]-(d.stock[k]||0))}))}
 function placeOrder(d,lines,user,note){const req=requirements(d,lines);if(!req.length)throw Error('Пустой заказ');if(req.some(x=>x.short>0))throw Error('Недостаточно комплектующих');
-const id=(d.orders.length?d.orders[0].id:0)+1,ts=new Date().toISOString();req.forEach(x=>{d.stock[x.key]-=x.need;d.log.unshift({ts,user,key:x.key,delta:-x.need,kind:'Заказ #'+id})});
-d.orders.unshift({id,ts,user,note:note||'',lines:lines.filter(l=>+l.qty>0).map(l=>({type:l.type,qty:+l.qty}))});return id}
-function adjust(d,key,val,mode,user,note){const old=d.stock[key]||0,nv=mode==='set'?+val:old+(+val);if(isNaN(nv)||nv<0)throw Error('Неверное значение');d.stock[key]=nv;
-d.log.unshift({ts:new Date().toISOString(),user,key,delta:nv-old,kind:(mode==='set'?'Корректировка':'Приход')+(note?': '+note:'')})}
+const id=(d.orders.length?d.orders[0].id:0)+1,ts=new Date().toISOString();req.forEach(x=>{d.stock[x.key]=(d.stock[x.key]||0)-x.need;d.log.unshift({ts,user,key:x.key,name:partName(d,x.key),delta:-x.need,kind:'Заказ #'+id})});
+d.orders.unshift({id,ts,user,note:note||'',lines:lines.filter(l=>+l.qty>0).map(l=>({type:l.type,name:(d.types.find(x=>x.id===l.type)||{}).name,qty:+l.qty}))});return id}
+function adjust(d,key,val,mode,user,note){const old=d.stock[key]||0,nv=mode==='set'?+val:old+(+val);if(val===''||isNaN(nv)||nv<0)throw Error('Неверное значение');d.stock[key]=nv;
+d.log.unshift({ts:new Date().toISOString(),user,key,name:partName(d,key),delta:nv-old,kind:(mode==='set'?'Корректировка':'Приход')+(note?': '+note:'')})}
+function addPart(d,typeId,name,unit,qty,thr){const p={id:uid(),name,unit:unit||'шт',qty:+qty||0};let k;if(typeId){d.types.find(x=>x.id===typeId).parts.push(p);k=typeId+'|'+p.id}else{d.shared.push(p);k=p.id}d.stock[k]=0;d.thr[k]=+thr||0;return k}
+function removePart(d,typeId,pid){if(typeId){const t=d.types.find(x=>x.id===typeId);t.parts=t.parts.filter(p=>p.id!==pid);pid=typeId+'|'+pid}else d.shared=d.shared.filter(p=>p.id!==pid);delete d.stock[pid];delete d.thr[pid]}
+function addType(d,name,copyFrom){const t={id:'t'+Date.now().toString(36),name,parts:[]};const src=d.types.find(x=>x.id===copyFrom);
+if(src)src.parts.forEach(p=>{t.parts.push({...p});d.stock[t.id+'|'+p.id]=0;d.thr[t.id+'|'+p.id]=d.thr[src.id+'|'+p.id]||0});d.types.push(t);return t.id}
 function hash(s){let h=5381;for(const c of s)h=(h*33^c.charCodeAt(0))>>>0;return h.toString(16)}
+function auth(d,login,pw){const u=d.users.find(x=>x.login.trim().toLowerCase()===login.trim().toLowerCase());if(!u||u.pw!==hash(pw))return{err:'Неверный логин или пароль'};if(u.disabled)return{err:'Доступ отключён администратором'};return{u}}
 /*ENDCORE*/
-let D=Store.load()||seed(),U=sessionStorage.getItem('sprut_user'),view='inv',invTab='shared',lines=[{type:'3-4',qty:1}],flash='';
-const $=s=>document.querySelector(s),save=()=>Store.save(D),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const fmt=ts=>new Date(ts).toLocaleString('ru-RU',{dateStyle:'short',timeStyle:'short'});
-function cls(k){const v=D.stock[k];return v<=0?'zero':v<=D.thr[k]?'low':'ok'}
-function render(){const a=$('#app');if(!U){a.innerHTML=authView();return}
-const me=D.users.find(u=>u.name===U)||{};a.innerHTML=`<header><b>SPRUT·CRM</b><span class="small">${esc(U)}${me.admin?' (админ)':''} <button onclick="logout()" style="min-height:36px">Выйти</button></span></header><main>${flash}${({inv:invView,order:orderView,hist:histView,set:setView})[view]()}</main>
+let D=migrate(Store.load()||seed()),U=localStorage.getItem('sprut_user'),view='inv',invTab='shared',bomTab='shared',lines=[{type:D.types[0].id,qty:1}],flash='';
+if(U&&!D.users.find(u=>u.login===U&&!u.disabled))U=null;
+const $=s=>document.querySelector(s),save=()=>Store.save(D),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=ts=>new Date(ts).toLocaleString('ru-RU',{dateStyle:'short',timeStyle:'short'});const ok=m=>flash=`<div class="msg" style="background:#24401a">✔ ${m}</div>`,bad=m=>flash=`<div class="msg e">${m}</div>`;
+const me=()=>D.users.find(u=>u.login===U)||{};
+function cls(k){const v=D.stock[k]||0;return v<=0?'zero':v<=(D.thr[k]||0)?'low':'ok'}
+function allKeys(){return[...D.shared.map(p=>p.id),...D.types.flatMap(t=>t.parts.map(p=>t.id+'|'+p.id))]}
+function render(){const a=$('#app');if(!U){a.innerHTML=authView();flash='';return}
+a.innerHTML=`<header><b>SPRUT·CRM</b><span class="small">${esc(me().name)}${me().admin?' (админ)':''} <button onclick="logout()" style="min-height:36px">Выйти</button></span></header><main>${flash}${({inv:invView,order:orderView,hist:histView,set:setView})[view]()}</main>
 <nav>${[['inv','📦 Склад'],['order','➕ Заказ'],['hist','📋 История'],['set','⚙️ Настройки']].map(([v,t])=>`<button class="${view===v?'on':''}" onclick="go('${v}')">${t}</button>`).join('')}</nav>`;flash=''}
-function authView(){const first=!D.users.length;return`<main><div class="card" style="margin-top:15vh"><h2 style="color:var(--acc)">SPRUT·CRM</h2>${flash}<p class="small">${first?'Первый пользователь станет администратором.':'Вход или регистрация работника'}</p>
-<input id="un" placeholder="Имя"><input id="pw" type="password" placeholder="Пароль"><button class="p btn-w" onclick="login()">Войти</button><button class="btn-w" onclick="register()">Зарегистрироваться</button></div></main>`}
-function login(){const n=$('#un').value.trim(),u=D.users.find(x=>x.name===n);if(!u||u.pw!==hash($('#pw').value)){flash='<div class="msg e">Неверное имя или пароль</div>';return render()}U=n;sessionStorage.setItem('sprut_user',n);render()}
-function register(){const n=$('#un').value.trim(),p=$('#pw').value;if(!n||p.length<3){flash='<div class="msg e">Имя и пароль (мин. 3 символа)</div>';return render()}
-if(D.users.find(x=>x.name===n)){flash='<div class="msg e">Пользователь уже есть</div>';return render()}D.users.push({name:n,pw:hash(p),admin:!D.users.length});save();U=n;sessionStorage.setItem('sprut_user',n);render()}
-function logout(){U=null;sessionStorage.removeItem('sprut_user');render()}
+const AI='autocapitalize="none" autocorrect="off" spellcheck="false"';
+function authView(){const first=!D.users.length;return`<main><form class="card" style="margin-top:12vh" onsubmit="${first?'bootstrap':'login'}();return false"><h2 style="color:var(--acc)">SPRUT·CRM</h2>${flash}
+<p class="small">${first?'Первый запуск: создайте учётную запись администратора.':'Вход только для доверенных лиц. Учётные записи выдаёт администратор.'}</p>
+<input id="un" name="username" autocomplete="username" ${AI} placeholder="Логин" required><input id="pw" name="password" type="password" autocomplete="${first?'new-password':'current-password'}" placeholder="Пароль" required>
+<button type="submit" class="p btn-w">${first?'Создать администратора':'Войти'}</button></form></main>`}
+function setUser(l){U=l;localStorage.setItem('sprut_user',l);view='inv';render()}
+function login(){const r=auth(D,$('#un').value,$('#pw').value);if(r.err){bad(r.err);return render()}setUser(r.u.login)}
+function bootstrap(){const n=$('#un').value.trim(),p=$('#pw').value;if(!n||p.length<4){bad('Логин и пароль (мин. 4 символа)');return render()}D.users.push({login:n,name:n,pw:hash(p),admin:true,disabled:false});save();setUser(n)}
+function logout(){U=null;localStorage.removeItem('sprut_user');render()}
 function go(v){view=v;render();scrollTo(0,0)}
-function rowP(k){return`<div class="row"><span>${esc(partName(k).replace(/ \(.*\)/,''))}<br><span class="small">мин. ${D.thr[k]} ${partUnit(k)}</span></span><span class="${cls(k)}" style="font-size:20px">${D.stock[k]} ${partUnit(k)}</span><button onclick="adjDlg('${k}')">±</button></div>`}
-function invView(){const lowN=Object.keys(D.stock).filter(k=>cls(k)!=='ok').length;
-return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}<div class="tabs">${['shared',...TYPES].map(t=>`<button class="${invTab===t?'on':''}" onclick="invTab='${t}';render()">${t==='shared'?'Общие':t+' ГГц'}${t!=='shared'&&TPARTS.some(p=>cls(t+'|'+p.id)!=='ok')?' ⚠️':''}</button>`).join('')}</div>
-<div class="card"><h2>${invTab==='shared'?'Общие комплектующие':'Антенна '+invTab+' ГГц'}</h2>${(invTab==='shared'?SPARTS.map(p=>p.id):TPARTS.map(p=>invTab+'|'+p.id)).map(rowP).join('')}</div><div id="dlg"></div>`}
-function adjDlg(k){$('#dlg').innerHTML=`<div class="card"><h2>${esc(partName(k))}</h2><p>Сейчас: <b>${D.stock[k]} ${partUnit(k)}</b></p><select id="am"><option value="add">Приход (+ к остатку)</option><option value="set">Корректировка (точный остаток)</option></select>
-<input id="av" type="number" inputmode="decimal" placeholder="Количество, ${partUnit(k)}"><input id="an" placeholder="Комментарий (необяз.)"><div class="line"><button onclick="$('#dlg').innerHTML=''">Отмена</button><button class="p" onclick="doAdj('${k}')">Сохранить</button></div></div>`;$('#dlg').scrollIntoView()}
-function doAdj(k){try{adjust(D,k,$('#av').value,$('#am').value,U,$('#an').value.trim());save();flash='<div class="msg" style="background:#24401a">✔ Сохранено</div>'}catch(e){flash=`<div class="msg e">${e.message}</div>`}render()}
-function orderView(){const req=requirements(D,lines),sh=req.some(x=>x.short>0);
-return`<div class="card"><h2>Новый заказ</h2>${lines.map((l,i)=>`<div class="line"><select onchange="lines[${i}].type=this.value;render()">${TYPES.map(t=>`<option ${t===l.type?'selected':''} value="${t}">${t} ГГц</option>`).join('')}</select>
-<input type="number" inputmode="numeric" min="1" value="${l.qty}" onchange="lines[${i}].qty=this.value;render()" style="max-width:90px"><button style="flex:0 0 48px" onclick="lines.splice(${i},1);if(!lines.length)lines.push({type:'3-4',qty:1});render()">✕</button></div>`).join('')}
-<button class="btn-w" onclick="lines.push({type:'3-4',qty:1});render()">+ Добавить позицию</button><input id="on" placeholder="Клиент / комментарий"></div>
-<div class="card"><h2>Потребуется</h2><table><tr><th>Деталь</th><th>Нужно</th><th>Есть</th></tr>${req.map(x=>`<tr><td>${esc(partName(x.key))}</td><td>${x.need}</td><td class="${x.short?'zero':'ok'}">${x.have}${x.short?' (−'+x.short+')':''}</td></tr>`).join('')}</table>
-${sh?'<div class="msg e">⛔ Не хватает комплектующих — заказ нельзя провести. Сделайте приход на складе.</div>':''}<button class="p btn-w" ${sh||!req.length?'disabled style="opacity:.4"':''} onclick="doOrder()">Подтвердить и списать</button></div>`}
-function doOrder(){try{const id=placeOrder(D,lines,U,$('#on').value.trim());save();lines=[{type:'3-4',qty:1}];flash=`<div class="msg" style="background:#24401a">✔ Заказ #${id} проведён, комплектующие списаны</div>`;view='hist'}catch(e){flash=`<div class="msg e">${e.message}</div>`}render()}
-function histView(){return`<div class="card"><h2>Заказы</h2>${D.orders.map(o=>`<div class="row"><span><b>#${o.id}</b> ${o.lines.map(l=>l.qty+'× '+l.type+' ГГц').join(', ')}<br><span class="small">${fmt(o.ts)} · ${esc(o.user)}${o.note?' · '+esc(o.note):''}</span></span></div>`).join('')||'<p class="small">Заказов пока нет</p>'}</div>
-<div class="card"><h2>Движение склада</h2><table>${D.log.slice(0,200).map(l=>`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(partName(l.key))}<br><span class="small">${esc(l.kind)}</span></td><td class="${l.delta<0?'low':'ok'}">${l.delta>0?'+':''}${l.delta}</td></tr>`).join('')||'<tr><td class="small">Пусто</td></tr>'}</table></div>`}
-function setView(){const me=D.users.find(u=>u.name===U);if(!me||!me.admin)return'<div class="card"><p>Настройки доступны только администратору.</p></div>'+backup();
-const inp=(lbl,path,v)=>`<div class="row"><span>${lbl}</span><input style="max-width:100px;margin:0" type="number" value="${v}" onchange="setNum('${path}',this.value)"></div>`;
-return`<div class="card"><h2>Расход на 1 антенну</h2>${[...TPARTS,...SPARTS].map(p=>inp(p.name+', '+p.unit,'bom.'+p.id,D.bom[p.id])).join('')}</div>
-<div class="card"><h2>Пороги «мало»</h2>${Object.keys(D.thr).map(k=>inp(esc(partName(k)),'thr.'+k,D.thr[k])).join('')}</div>
-<div class="card"><h2>Пользователи</h2>${D.users.map(u=>`<div class="row"><span>${esc(u.name)}${u.admin?' (админ)':''}</span></div>`).join('')}</div>${backup()}`}
+function rowP(k,p){return`<div class="row"><span>${esc(p.name)}<br><span class="small">мин. ${D.thr[k]||0} ${esc(p.unit)} · на 1 ант.: ${p.qty}</span></span><span class="${cls(k)}" style="font-size:20px">${D.stock[k]||0} ${esc(p.unit)}</span><button onclick="adjDlg('${k}')">±</button></div>`}
+function invView(){const lowN=allKeys().filter(k=>cls(k)!=='ok').length,t=D.types.find(x=>x.id===invTab);if(!t)invTab='shared';
+return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${t.parts.some(p=>cls(t.id+'|'+p.id)!=='ok')?' ⚠️':''}</button>`).join('')}</div>
+<div class="card"><h2>${t?'Антенна '+esc(t.name):'Общие комплектующие'}</h2>${(t?t.parts.map(p=>rowP(t.id+'|'+p.id,p)):D.shared.map(p=>rowP(p.id,p))).join('')||'<p class="small">Нет деталей</p>'}</div><div id="dlg"></div>`}
+function adjDlg(k){$('#dlg').innerHTML=`<div class="card"><h2>${esc(partName(D,k))}</h2><p>Сейчас: <b>${D.stock[k]||0} ${esc(partUnit(D,k))}</b></p><select id="am"><option value="add">Приход (+ к остатку)</option><option value="set">Корректировка (точный остаток)</option></select>
+<input id="av" type="number" inputmode="decimal" placeholder="Количество, ${esc(partUnit(D,k))}"><input id="an" placeholder="Комментарий (необяз.)"><div class="line"><button onclick="$('#dlg').innerHTML=''">Отмена</button><button class="p" onclick="doAdj('${k}')">Сохранить</button></div></div>`;$('#dlg').scrollIntoView()}
+function doAdj(k){try{adjust(D,k,$('#av').value,$('#am').value,U,$('#an').value.trim());save();ok('Сохранено')}catch(e){bad(e.message)}render()}
+function orderView(){lines.forEach(l=>{if(!D.types.find(t=>t.id===l.type))l.type=D.types[0].id});const req=requirements(D,lines),sh=req.some(x=>x.short>0);
+return`<div class="card"><h2>Новый заказ</h2>${lines.map((l,i)=>`<div class="line"><select onchange="lines[${i}].type=this.value;render()">${D.types.map(t=>`<option ${t.id===l.type?'selected':''} value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
+<input type="number" inputmode="numeric" min="1" value="${l.qty}" onchange="lines[${i}].qty=this.value;render()" style="max-width:90px"><button style="flex:0 0 48px" onclick="lines.splice(${i},1);if(!lines.length)lines.push({type:D.types[0].id,qty:1});render()">✕</button></div>`).join('')}
+<button class="btn-w" onclick="lines.push({type:D.types[0].id,qty:1});render()">+ Добавить позицию</button><input id="on" placeholder="Клиент / комментарий"></div>
+<div class="card"><h2>Потребуется</h2><table><tr><th>Деталь</th><th>Нужно</th><th>Есть</th></tr>${req.map(x=>`<tr><td>${esc(partName(D,x.key))}</td><td>${x.need}</td><td class="${x.short?'zero':'ok'}">${x.have}${x.short?' (−'+x.short+')':''}</td></tr>`).join('')}</table>
+${sh?'<div class="msg e">⛔ Не хватает комплектующих — заказ нельзя провести. Сделайте приход на складе.</div>':''}<button id="confirm" class="p btn-w" ${sh||!req.length?'disabled style="opacity:.4"':''} onclick="doOrder()">Подтвердить и списать</button></div>`}
+function doOrder(){try{const id=placeOrder(D,lines,U,$('#on').value.trim());save();lines=[{type:D.types[0].id,qty:1}];ok(`Заказ #${id} проведён, комплектующие списаны`);view='hist'}catch(e){bad(e.message)}render()}
+function histView(){return`<div class="card"><h2>Заказы</h2>${D.orders.map(o=>`<div class="row"><span><b>#${o.id}</b> ${o.lines.map(l=>l.qty+'× '+esc(l.name||l.type+' ГГц')).join(', ')}<br><span class="small">${fmt(o.ts)} · ${esc(o.user)}${o.note?' · '+esc(o.note):''}</span></span></div>`).join('')||'<p class="small">Заказов пока нет</p>'}</div>
+<div class="card"><h2>Движение склада</h2><table>${D.log.slice(0,200).map(l=>`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(l.name||partName(D,l.key))}<br><span class="small">${esc(l.kind)}</span></td><td class="${l.delta<0?'low':'ok'}">${l.delta>0?'+':''}${l.delta}</td></tr>`).join('')||'<tr><td class="small">Пусто</td></tr>'}</table></div>`}
+function setView(){if(!me().admin)return'<div class="card"><p>Настройки доступны только администратору.</p></div>'+backup();
+const t=D.types.find(x=>x.id===bomTab);if(!t)bomTab='shared';const parts=t?t.parts:D.shared,tid=t?t.id:'';
+return`<div class="card"><h2>Доверенные лица</h2>${D.users.map((u,i)=>`<div class="row"><span>${esc(u.login)}${u.admin?' (админ)':''}${u.disabled?' <span class="zero">отключён</span>':''}</span>
+<span class="line" style="flex:0 0 auto"><button onclick="uPw(${i})">🔑</button>${u.login!==U?`<button onclick="uTog(${i})">${u.disabled?'Вкл':'Выкл'}</button><button class="d" onclick="uDel(${i})">🗑</button>`:''}</span></div>`).join('')}
+<form onsubmit="uAdd();return false"><h3>Добавить</h3><input id="nl" ${AI} placeholder="Логин" required><input id="np" type="password" autocomplete="new-password" placeholder="Пароль (мин. 4)" required><label class="small"><input id="na" type="checkbox" style="width:auto;min-height:auto"> администратор</label><button class="p btn-w" type="submit">Добавить пользователя</button></form></div>
+<div class="card"><h2>Состав антенн (BOM)</h2><div class="tabs"><button class="${bomTab==='shared'?'on':''}" onclick="bomTab='shared';render()">Общие</button>${D.types.map(x=>`<button class="${bomTab===x.id?'on':''}" onclick="bomTab='${x.id}';render()">${esc(x.name)}</button>`).join('')}<button onclick="tAdd()">+ Тип</button></div>
+${t?`<div class="line"><input value="${esc(t.name)}" onchange="if(this.value.trim()){D.types.find(x=>x.id==='${tid}').name=this.value.trim();save();render()}"><button class="d" style="flex:0 0 auto" onclick="tDel('${tid}')">Удалить тип</button></div>`:'<p class="small">Общие детали расходуются на каждую антенну любого типа.</p>'}
+<table><tr><th>Деталь</th><th>Ед.</th><th>На 1</th><th>Мин.</th><th></th></tr>${parts.map(p=>{const k=tid?tid+'|'+p.id:p.id;return`<tr><td><input style="margin:0" value="${esc(p.name)}" onchange="pSet('${tid}','${p.id}','name',this.value)"></td><td><input style="margin:0;width:56px" value="${esc(p.unit)}" onchange="pSet('${tid}','${p.id}','unit',this.value)"></td>
+<td><input style="margin:0;width:64px" type="number" value="${p.qty}" onchange="pSet('${tid}','${p.id}','qty',this.value)"></td><td><input style="margin:0;width:64px" type="number" value="${D.thr[k]||0}" onchange="if(+this.value>=0){D.thr['${k}']=+this.value;save()}"></td><td><button class="d" onclick="pDel('${tid}','${p.id}')">✕</button></td></tr>`}).join('')}</table>
+<form onsubmit="pAdd('${tid}');return false"><h3>Новая деталь ${t?'для '+esc(t.name):'(общая)'}</h3><input id="pn" placeholder="Название" required><div class="line"><input id="pu" placeholder="Ед. (шт/мл)" value="шт"><input id="pq" type="number" placeholder="На 1 антенну" required><input id="pt" type="number" placeholder="Мин." value="0"></div><button class="p btn-w" type="submit">Добавить деталь</button></form></div>${backup()}`}
+function uAdd(){const l=$('#nl').value.trim(),p=$('#np').value;if(!l||p.length<4){bad('Логин и пароль (мин. 4 символа)');return render()}if(D.users.some(u=>u.login.toLowerCase()===l.toLowerCase())){bad('Такой логин уже есть');return render()}
+D.users.push({login:l,name:l,pw:hash(p),admin:$('#na').checked,disabled:false});save();ok('Пользователь '+esc(l)+' добавлен');render()}
+function uPw(i){const p=prompt('Новый пароль для '+D.users[i].login+' (мин. 4 символа):');if(p==null)return;if(p.length<4){bad('Слишком короткий пароль');return render()}D.users[i].pw=hash(p);save();ok('Пароль изменён');render()}
+function uTog(i){D.users[i].disabled=!D.users[i].disabled;save();render()}
+function uDel(i){if(confirm('Удалить пользователя '+D.users[i].login+'?')){D.users.splice(i,1);save();render()}}
+function pSet(tid,pid,f,v){const p=(tid?D.types.find(x=>x.id===tid).parts:D.shared).find(x=>x.id===pid);if(f==='qty'){if(!(+v>=0))return;v=+v}else{v=v.trim();if(!v)return}p[f]=v;save()}
+function pAdd(tid){const n=$('#pn').value.trim(),q=$('#pq').value;if(!n||!(+q>=0)){bad('Укажите название и количество');return render()}addPart(D,tid,n,$('#pu').value.trim(),q,$('#pt').value);save();ok('Деталь «'+esc(n)+'» добавлена (остаток 0 — сделайте приход на складе)');render()}
+function pDel(tid,pid){if(confirm('Удалить деталь из состава? Её остаток тоже будет удалён.')){removePart(D,tid,pid);save();render()}}
+function tAdd(){const n=prompt('Название нового типа антенны (напр. 9-10 ГГц):');if(!n||!n.trim())return;const c=confirm('Скопировать состав деталей из типа «'+D.types[0].name+'»? (ОК — скопировать, Отмена — пустой)');bomTab=addType(D,n.trim(),c?D.types[0].id:null);save();ok('Тип добавлен');render()}
+function tDel(tid){if(D.types.length<2)return alert('Нужен хотя бы один тип');if(confirm('Удалить тип антенны и все его детали со склада?')){const t=D.types.find(x=>x.id===tid);t.parts.forEach(p=>{delete D.stock[tid+'|'+p.id];delete D.thr[tid+'|'+p.id]});D.types=D.types.filter(x=>x.id!==tid);bomTab='shared';save();render()}}
 function backup(){return`<div class="card"><h2>Резервная копия</h2><button class="btn-w" onclick="exp()">⬇ Экспорт JSON</button><label class="small">Импорт JSON:</label><input type="file" accept=".json" onchange="imp(this.files[0])"></div>`}
-function setNum(p,v){const[o,k]=[p.split('.')[0],p.slice(p.indexOf('.')+1)];if(+v>=0){D[o][k]=+v;save()}}
 function exp(){const b=new Blob([JSON.stringify(D,null,1)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sprut-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click()}
-function imp(f){if(!f)return;f.text().then(t=>{const n=JSON.parse(t);if(!n.stock||!n.bom)throw 0;if(confirm('Заменить все данные копией?')){D=n;save();flash='<div class="msg" style="background:#24401a">✔ Импортировано</div>';render()}}).catch(()=>{flash='<div class="msg e">Неверный файл</div>';render()})}
+function imp(f){if(!f)return;f.text().then(t=>{const n=JSON.parse(t);if(!n.stock)throw 0;if(confirm('Заменить все данные копией?')){D=migrate(n);save();ok('Импортировано');render()}}).catch(()=>{bad('Неверный файл');render()})}
 render();if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
 </script></body></html>
