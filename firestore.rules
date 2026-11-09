@@ -5,12 +5,11 @@ service cloud.firestore {
     function uref() { return /databases/$(db)/documents/users/$(request.auth.uid); }
     function active() { return signed() && exists(uref()) && get(uref()).data.active == true; }
     function admin() { return active() && get(uref()).data.admin == true; }
-    // state after the current write/batch (used for first-run bootstrap)
     function adminAfter() { return signed() && existsAfter(uref()) && getAfter(uref()).data.active == true && getAfter(uref()).data.admin == true; }
     function booting() { return !exists(/databases/$(db)/documents/meta/public) && existsAfter(/databases/$(db)/documents/meta/public); }
 
     match /meta/public {
-      allow read: if true;                       // only {bootstrapped:true}
+      allow read: if true;
       allow create: if signed() && booting() && adminAfter();
     }
     match /users/{uid} {
@@ -18,9 +17,9 @@ service cloud.firestore {
       allow create: if admin()
         || (signed() && request.auth.uid == uid && booting()
             && request.resource.data.admin == true && request.resource.data.active == true);
-      allow update, delete: if admin() && uid != request.auth.uid;   // admin cannot lock himself out
+      allow update, delete: if admin() && uid != request.auth.uid;
     }
-    match /config/{d} {                          // BOM + thresholds + schema
+    match /config/{d} {
       allow read: if active();
       allow write: if adminAfter();
     }
@@ -32,7 +31,7 @@ service cloud.firestore {
     match /orders/{id} {
       allow read: if active();
       allow create: if active() && request.resource.data.uid == request.auth.uid;
-      allow update: if active();                 // complete / cancel
+      allow update: if active();
     }
     match /log/{id} {
       allow read: if active();
@@ -42,6 +41,22 @@ service cloud.firestore {
       allow read: if active();
       allow create, update: if active();
       allow delete: if admin();
+    }
+    match /partners/{id} {
+      allow read: if active();
+      allow create: if active() || adminAfter();
+      allow update: if active();
+      allow delete: if admin();
+    }
+    match /welding/{id} {
+      allow read: if active();
+      allow create: if active() || adminAfter();
+      allow update: if active();
+      allow delete: if admin();
+    }
+    match /weldingLog/{id} {
+      allow read: if active();
+      allow create: if active() && request.resource.data.uid == request.auth.uid;
     }
   }
 }

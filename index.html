@@ -20,28 +20,44 @@ th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;lett
 tr.over td{background:#3a1814}tr.near td{background:#3a2e10}.chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}
 .chip.a{background:#2a4018;color:var(--acc)}.chip.d{background:#1a3040;color:#7ec8e0}.chip.c{background:#402018;color:#e08070}
 .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}details.vsec{border:1px solid var(--line);border-radius:10px;margin:8px 0;padding:0 10px}details.vsec>summary{padding:12px 0;cursor:pointer;font-weight:700;list-style:none}details.vsec>summary::-webkit-details-marker{display:none}
+table.weld{font-size:12px}table.weld th,table.weld td{padding:6px 3px;white-space:nowrap}table.weld tr.act td{background:#1e2a18}table.weld .tot{font-weight:700;background:#252d34}
 </style></head><body><div id="app"></div>
 <script>
 /*CORE*/
 const TYPES=['3-4','4-5','5-6','6-7','7-8','8-9'];
 const DEFAULT_DBIS=[14,16,18,21],DEFAULT_CONNS=[1,2];
+const WELD_SHEET_GHZ=['5-6','6-7','7-8','8-9'];
+const WELD_SEED_PARTNERS=[{id:'roman',name:'Роман'},{id:'dmytro',name:'Дмитро'}];
+const WELD_SEED_ROWS=[
+ {partnerId:'roman',code:'6-7-14-1',received:40,returned:40},
+ {partnerId:'roman',code:'6-7-14-2',received:20,returned:20},
+ {partnerId:'roman',code:'6-7-18-1',received:20,returned:0},
+ {partnerId:'dmytro',code:'6-7-14-2',received:16,returned:0},
+ {partnerId:'dmytro',code:'6-7-18-2',received:5,returned:0},
+ {partnerId:'dmytro',code:'7-8-14-2',received:4,returned:0},
+ {partnerId:'dmytro',code:'7-8-18-2',received:19,returned:13},
+ {partnerId:'dmytro',code:'8-9-18-1',received:18,returned:0}
+];
 const coll=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function seed(){const stock={},thr={};const tv={'3-4':[40,20,20],'4-5':[30,15,3],'5-6':[6,10,10],'6-7':[24,12,12],'7-8':[0,4,4],'8-9':[18,9,9]};
-TYPES.forEach(t=>{DEFAULT_DBIS.forEach(dbi=>{stock[t+'|'+dbi+'|horn']=dbi===14?tv[t][0]:0;thr[t+'|'+dbi+'|horn']=10});
+TYPES.forEach(t=>{DEFAULT_DBIS.forEach(dbi=>{stock[t+'|'+dbi+'|horn']=dbi===14?tv[t][0]:0;thr[t+'|'+dbi+'|horn']=10;
+ stock[t+'|'+dbi+'|blank']=0;thr[t+'|'+dbi+'|blank']=0});
  DEFAULT_CONNS.forEach(c=>{stock[t+'|'+c+'|cup']=c===1?tv[t][1]:0;thr[t+'|'+c+'|cup']=5})});
 Object.assign(stock,{m24:250,cma:12,cap:TYPES.reduce((s,t)=>s+tv[t][2],0)+30,primer:3000,paint:800});
 Object.assign(thr,{m24:80,cma:10,cap:10,primer:1000,paint:1000});
-return{schema:3,types:TYPES.map(t=>({id:t,name:t+' ГГц',dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]})),
+return{schema:4,weldingSeeded:true,types:TYPES.map(t=>({id:t,name:t+' ГГц',dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]})),
  shared:[{id:'m24',name:'Винт М24',unit:'шт',qty:8},{id:'cma',name:'CMA разъём',unit:'шт',qty:1},{id:'cap',name:'Заглушка',unit:'шт',qty:1},{id:'primer',name:'Грунт',unit:'мл',qty:50},{id:'paint',name:'Краска',unit:'мл',qty:50}],
- vbom:{horn:{name:'Деталь для рупора',unit:'шт',qty:2},cup:{name:'Стакан',unit:'шт',qty:1}},thr,stock,orders:[],log:[],users:[]}}
-function migrate(d){if(!d.types){const b=d.bom||{};d.types=TYPES.map(t=>({id:t,name:t+' ГГц',parts:[{id:'horn',name:'Деталь для рупора',unit:'шт',qty:b.horn??2},{id:'cup',name:'Стакан',unit:'шт',qty:b.cup??1},{id:'cap',name:'Заглушка',unit:'шт',qty:b.cap??1}]}));
+ vbom:{horn:{name:'Рупор',unit:'шт',qty:1},cup:{name:'Стакан',unit:'шт',qty:1},blank:{name:'Заготовка рупора',unit:'шт',qty:2}},thr,stock,orders:[],log:[],users:[]}}
+function migrate(d){if(!d.types){const b=d.bom||{};d.types=TYPES.map(t=>({id:t,name:t+' ГГц',parts:[{id:'horn',name:'Рупор',unit:'шт',qty:b.horn??1},{id:'cup',name:'Стакан',unit:'шт',qty:b.cup??1},{id:'cap',name:'Заглушка',unit:'шт',qty:b.cap??1}]}));
  d.shared=[{id:'m24',name:'Винт М24',unit:'шт',qty:b.m24??8},{id:'cma',name:'CMA разъём',unit:'шт',qty:b.cma??1},{id:'primer',name:'Грунт',unit:'мл',qty:b.primer??50},{id:'paint',name:'Краска',unit:'мл',qty:b.paint??50}];delete d.bom}
 d.users=(d.users||[]).map(u=>({login:u.login||u.name,name:u.name||u.login,pw:u.pw,admin:!!u.admin,disabled:!!u.disabled}));d.stock=d.stock||{};d.thr=d.thr||{};d.orders=d.orders||[];d.log=d.log||[];d.shared=d.shared||[];return d}
-function needsMig(d){if(!d||!d.types||!d.types.length)return false;if(!d.schema||d.schema<3)return true;if(!d.vbom)return true;
+function needsMig(d){if(!d||!d.types||!d.types.length)return false;if(!d.schema||d.schema<4)return true;if(!d.vbom||!d.vbom.horn||d.vbom.horn.qty!==1||!d.vbom.blank)return true;
  if(d.shared.some(p=>p.id==='bush'))return true;if(!d.shared.some(p=>p.id==='cap'))return true;
  if(d.types.some(t=>(t.parts||[]).some(p=>p.id==='cap'||p.id==='horn'||p.id==='cup')))return true;
  if(Object.keys(d.stock||{}).some(k=>{const p=k.split('|');return (p.length===4&&p[3]==='cup')||(p.length===2&&p[1]==='cap')}))return true;
  if(d.types.some(t=>!t.dbis||!t.conns||DEFAULT_DBIS.some(x=>!(t.dbis||[]).includes(x))))return true;
+ if(d.types.some(t=>(t.dbis||DEFAULT_DBIS).some(dbi=>d.stock[t.id+'|'+dbi+'|blank']==null)))return true;
+ if(!d.weldingSeeded)return true;
  return false}
 function migrateV2(d){const notes=[];d.vbom=d.vbom||{horn:{name:'Деталь для рупора',unit:'шт',qty:2},cup:{name:'Стакан',unit:'шт',qty:1}};
  d.types.forEach(t=>{if(!Array.isArray(t.dbis)||!t.dbis.length)t.dbis=[14,18];if(!Array.isArray(t.conns)||!t.conns.length)t.conns=[...DEFAULT_CONNS];
@@ -86,8 +102,28 @@ function migrateV3(d){const notes=[];
   Object.keys(d.stock).filter(k=>k.startsWith(t.id+'|')&&k.endsWith('|cup')&&k.split('|').length===4).forEach(k=>{delete d.stock[k];delete d.thr[k]})});
  notes.push('дБи: 14/16/18/21 (добавлены недостающие). Стакан общий на ГГц (1 и 2 разъёма). CMA = число разъёмов.');
  d.schema=3;return{notes:[...new Set(notes)]}}
-function runMigrations(d){migrate(d);const notes=[];if(!d.schema||d.schema<2){const r=migrateV2(d);notes.push(...r.notes)}
- if(!d.schema||d.schema<3||needsMig(d)){const r=migrateV3(d);notes.push(...r.notes)}return{notes:[...new Set(notes)]}}
+function migrateV4(d){const notes=[];
+ if(!d.schema||d.schema<3){const r=migrateV3(d);notes.push(...r.notes)}
+ d.vbom=d.vbom||{};
+ const oldName=(d.vbom.horn&&d.vbom.horn.name)||'';
+ const oldQty=d.vbom.horn?d.vbom.horn.qty:2;
+ d.vbom.horn={name:'Рупор',unit:'шт',qty:1};
+ d.vbom.cup=d.vbom.cup||{name:'Стакан',unit:'шт',qty:1};
+ d.vbom.blank={name:'Заготовка рупора',unit:(d.vbom.blank&&d.vbom.blank.unit)||'шт',qty:2};
+ if(oldName&&oldName!=='Рупор')notes.push('Переименовано: «'+oldName+'» → «Рупор».');
+ if(oldQty!==1)notes.push('BOM: на антенну нужен 1 рупор (было ×'+(oldQty??2)+'). Остатки рупоров на складе не менялись.');
+ let blanks=0;
+ d.types.forEach(t=>{(t.dbis||DEFAULT_DBIS).forEach(dbi=>{const bk=t.id+'|'+dbi+'|blank';
+  if(d.stock[bk]==null){d.stock[bk]=0;blanks++}if(d.thr[bk]==null)d.thr[bk]=0;
+  const hk=t.id+'|'+dbi+'|horn';if(d.stock[hk]==null)d.stock[hk]=0;if(d.thr[hk]==null)d.thr[hk]=10})});
+ notes.push('Добавлены «Заготовка рупора» (2 шт = 1 рупор на сварку), остаток 0'+(blanks?'; ключей: '+blanks:'')+'.');
+ d.schema=4;return{notes:[...new Set(notes)]}}
+function runMigrations(d){migrate(d);const notes=[];
+ if(!d.schema||d.schema<2){const r=migrateV2(d);notes.push(...r.notes)}
+ if(!d.schema||d.schema<3){const r=migrateV3(d);notes.push(...r.notes)}
+ if(!d.schema||d.schema<4||!d.vbom||!d.vbom.blank||(d.vbom.horn&&d.vbom.horn.qty!==1)||d.types.some(t=>(t.dbis||[]).some(dbi=>d.stock[t.id+'|'+dbi+'|blank']==null))){
+  const r=migrateV4(d);notes.push(...r.notes)}
+ return{notes:[...new Set(notes)]}}
 const uid=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 function sharedQty(p,conn){if(p.id==='cma')return +conn;if(p.id==='cap')return +conn===1?1:0;return +p.qty||0}
 function sharedQtyHint(p){if(p.id==='cma')return '=число разъёмов';if(p.id==='cap')return '1 при 1 разъёме, 0 при 2';return 'на 1 ант.: '+p.qty}
@@ -98,22 +134,48 @@ function variantLabel(typeId,dbi,conn){return typeId+' '+dbi+' ('+conn+')'}
 function listVariants(d){const out=[];[...d.types].sort((a,b)=>ghz(a)-ghz(b)||coll.compare(a.name,b.name)).forEach(t=>{(t.dbis||DEFAULT_DBIS).forEach(dbi=>{(t.conns||DEFAULT_CONNS).forEach(conn=>{
  out.push({id:t.id+'|'+dbi+'|'+conn,label:variantLabel(t.id,dbi,conn),typeId:t.id,dbi,conn,group:t.name})})})});return out}
 function ghz(t){const m=String(t.name||t.id).match(/\d+([.,]\d+)?/);return m?parseFloat(m[0].replace(',','.')):1e9}
+function weldCode(typeId,dbi,conn){return typeId+'-'+dbi+'-'+conn}
+function parseWeldCode(code){const parts=String(code||'').split('-');if(parts.length<4)return null;
+ const conn=+parts.pop(),dbi=+parts.pop(),typeId=parts.join('-');if(!typeId||!(dbi>0)||!(conn>0))return null;
+ return{typeId,dbi,conn,code:weldCode(typeId,dbi,conn)}}
+function blankKey(typeId,dbi){return typeId+'|'+dbi+'|blank'}
+function hornKey(typeId,dbi){return typeId+'|'+dbi+'|horn'}
+function weldDocId(partnerId,code){return partnerId+'__'+code}
+function listWeldCodes(d,ghzFilter){const out=[];const types=[...d.types].sort((a,b)=>ghz(a)-ghz(b)||coll.compare(a.name,b.name));
+ types.forEach(t=>{if(ghzFilter&&ghzFilter.length&&!ghzFilter.includes(t.id))return;
+  (t.dbis||DEFAULT_DBIS).forEach(dbi=>{(t.conns||DEFAULT_CONNS).forEach(conn=>{out.push({code:weldCode(t.id,dbi,conn),typeId:t.id,dbi,conn})})})});
+ return out}
+function weldRem(rec){return Math.max(0,(+rec.received||0)-(+rec.returned||0))}
+function weldSendCore(d,rec,n,user,partnerName){n=+n;if(!(n>0)||n!==Math.floor(n))throw Error('Укажите целое количество рупоров (пар)');
+ const need=2*n,bk=blankKey(rec.typeId,rec.dbi),have=d.stock[bk]||0;
+ const deducted=Math.min(need,Math.max(0,have)),short=Math.max(0,need-deducted);
+ const ts=new Date().toISOString(),label=partName(d,bk),who=partnerName||rec.partnerId||'';
+ if(deducted>0){d.stock[bk]=have-deducted;d.log.unshift({ts,user,key:bk,name:label,delta:-deducted,kind:'Сварка → '+who+' · '+rec.code+(short?' (частично)':'')})}
+ if(short>0)d.log.unshift({ts,user,key:bk,name:label,delta:0,kind:'Сварка недост. заготовок '+short+' · '+who+' · '+rec.code});
+ rec.received=(+rec.received||0)+n;return{deducted,short,need,received:rec.received}}
+function weldRecvCore(d,rec,m,user,partnerName){m=+m;if(!(m>0)||m!==Math.floor(m))throw Error('Укажите целое количество');
+ const rem=weldRem(rec);if(m>rem)throw Error('Нельзя принять больше остатка у партнёра ('+rem+')');
+ rec.returned=(+rec.returned||0)+m;const hk=hornKey(rec.typeId,rec.dbi);
+ d.stock[hk]=(d.stock[hk]||0)+m;const ts=new Date().toISOString(),who=partnerName||rec.partnerId||'';
+ d.log.unshift({ts,user,key:hk,name:partName(d,hk),delta:m,kind:'Сварка ← '+who+' · '+rec.code});
+ return{returned:rec.returned,remainder:weldRem(rec)}}
 function findPart(d,k){const p=String(k).split('|');
  if(p.length===1)return{p:(d.shared||[]).find(x=>x.id===p[0])};
  if(p.length===2){const t=(d.types||[]).find(x=>x.id===p[0]);return{t,p:t&&(t.parts||[]).find(x=>x.id===p[1])}};
- if(p.length===3&&p[2]==='horn'){const t=(d.types||[]).find(x=>x.id===p[0]);const vb=(d.vbom||{}).horn||{name:'Деталь для рупора',unit:'шт',qty:2};return{t,p:{...vb,id:'horn'},dbi:+p[1],kind:'horn'}}
+ if(p.length===3&&p[2]==='horn'){const t=(d.types||[]).find(x=>x.id===p[0]);const vb=(d.vbom||{}).horn||{name:'Рупор',unit:'шт',qty:1};return{t,p:{...vb,id:'horn'},dbi:+p[1],kind:'horn'}}
+ if(p.length===3&&p[2]==='blank'){const t=(d.types||[]).find(x=>x.id===p[0]);const vb=(d.vbom||{}).blank||{name:'Заготовка рупора',unit:'шт',qty:2};return{t,p:{...vb,id:'blank'},dbi:+p[1],kind:'blank'}}
  if(p.length===3&&p[2]==='cup'){const t=(d.types||[]).find(x=>x.id===p[0]);const vb=(d.vbom||{}).cup||{name:'Стакан',unit:'шт',qty:1};return{t,p:{...vb,id:'cup'},conn:+p[1],kind:'cup'}}
  if(p.length===4&&p[3]==='cup'){const t=(d.types||[]).find(x=>x.id===p[0]);const vb=(d.vbom||{}).cup||{name:'Стакан',unit:'шт',qty:1};return{t,p:{...vb,id:'cup'},dbi:+p[1],conn:+p[2],kind:'cup'}}
  return{p:null}}
 function partName(d,k){const f=findPart(d,k);if(!f.p)return k+' (удалено)';
- if(f.kind==='horn')return f.p.name+' ('+(f.t?f.t.name:p0(k))+', '+f.dbi+' дБи)';
+ if(f.kind==='horn'||f.kind==='blank')return f.p.name+' ('+(f.t?f.t.name:p0(k))+', '+f.dbi+' дБи)';
  if(f.kind==='cup')return f.p.name+' ('+(f.t?f.t.name:p0(k))+', '+f.conn+' разъём.)';
  return f.p.name+(f.t?' ('+f.t.name+')':'')}
 function p0(k){return String(k).split('|')[0]}
 function partUnit(d,k){const{p}=findPart(d,k);return p?p.unit:''}
-function requirements(d,lines){const r={};const vb=d.vbom||{horn:{qty:2},cup:{qty:1}};
+function requirements(d,lines){const r={};const vb=d.vbom||{horn:{qty:1},cup:{qty:1}};
  lines.forEach(l=>{const q=+l.qty;if(!(q>0))return;const{typeId,dbi,conn}=parseVariant(l);const t=(d.types||[]).find(x=>x.id===typeId);if(!t)return;
-  const hk=typeId+'|'+dbi+'|horn';r[hk]=(r[hk]||0)+(vb.horn?.qty??2)*q;
+  const hk=typeId+'|'+dbi+'|horn';r[hk]=(r[hk]||0)+(vb.horn?.qty??1)*q;
   const ck=typeId+'|'+conn+'|cup';r[ck]=(r[ck]||0)+(vb.cup?.qty??1)*q;
   (t.parts||[]).forEach(p=>{const k=typeId+'|'+p.id;r[k]=(r[k]||0)+(+p.qty||0)*q});
   (d.shared||[]).forEach(p=>{const sq=sharedQty(p,conn);if(sq>0)r[p.id]=(r[p.id]||0)+sq*q})});
@@ -135,10 +197,11 @@ function removePart(d,typeId,pid){if(typeId){const t=d.types.find(x=>x.id===type
 function addType(d,name,copyFrom){const t={id:'t'+Date.now().toString(36),name,dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]};const src=d.types.find(x=>x.id===copyFrom);
  if(src){t.dbis=[...(src.dbis||DEFAULT_DBIS)];t.conns=[...(src.conns||DEFAULT_CONNS)];(src.parts||[]).forEach(p=>{t.parts.push({...p});d.stock[t.id+'|'+p.id]=0;d.thr[t.id+'|'+p.id]=d.thr[src.id+'|'+p.id]||0})}
  ensureVariantStock(d,t);d.types.push(t);return t.id}
-function ensureVariantStock(d,t){(t.dbis||[]).forEach(dbi=>{const hk=t.id+'|'+dbi+'|horn';if(d.stock[hk]==null)d.stock[hk]=0;if(d.thr[hk]==null)d.thr[hk]=10});
+function ensureVariantStock(d,t){(t.dbis||[]).forEach(dbi=>{const hk=t.id+'|'+dbi+'|horn';if(d.stock[hk]==null)d.stock[hk]=0;if(d.thr[hk]==null)d.thr[hk]=10;
+  const bk=t.id+'|'+dbi+'|blank';if(d.stock[bk]==null)d.stock[bk]=0;if(d.thr[bk]==null)d.thr[bk]=0});
  (t.conns||[]).forEach(c=>{const ck=t.id+'|'+c+'|cup';if(d.stock[ck]==null)d.stock[ck]=0;if(d.thr[ck]==null)d.thr[ck]=5})}
 function allKeys(d){const keys=(d.shared||[]).map(p=>p.id);(d.types||[]).forEach(t=>{(t.parts||[]).forEach(p=>keys.push(t.id+'|'+p.id));
- (t.dbis||[]).forEach(dbi=>keys.push(t.id+'|'+dbi+'|horn'));(t.conns||[]).forEach(c=>keys.push(t.id+'|'+c+'|cup'))});return keys}
+ (t.dbis||[]).forEach(dbi=>{keys.push(t.id+'|'+dbi+'|horn');keys.push(t.id+'|'+dbi+'|blank')});(t.conns||[]).forEach(c=>keys.push(t.id+'|'+c+'|cup'))});return keys}
 function orderStatus(o){return o.status||'done'}
 function daysLeft(deadline){if(!deadline)return null;const end=new Date(deadline+'T23:59:59');
  const now=new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Warsaw'}));
@@ -157,6 +220,7 @@ const INV_STOCK_20261109={
 
 let D=null,U=null,ME=null,STATUS='loading',BOOT=false,view='inv',invTab='shared',bomTab='shared',lines=[],flash='',PENDING=false,FT=0;
 let oFilter='',oSort='deadline',oDir=1,hFilter='',hSort='ts',hDir=-1,cliEdit=null,deadMode='days',deadDays=7,orderOpen=null,logOpen=null,buyAlert='';
+let weldFilter='all',weldGhz='sheet',weldDlg=null,partEdit=null;
 const me=()=>(D&&ME&&D.users.find(u=>u.uid===ME.uid))||ME||{};
 const saveCfg=()=>FB.saveConfig().catch(e=>{bad('Ошибка сохранения: '+FB.err(e));render()});
 function remote(){const a=document.activeElement;if(document.querySelector('nav')&&a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)&&a.type!=='file'){PENDING=true;return}render()}
@@ -170,8 +234,8 @@ function render(){const a=$('#app');if(STATUS==='loading'){a.innerHTML='<main><d
 if(STATUS==='noconfig'){a.innerHTML='<main><div class="card msg e" style="margin-top:20vh">Не настроен firebase-config.js</div></main>';return}
 if(!U||!D){a.innerHTML=authView();flash='';return}
 if(!lines.length){const v=listVariants(D)[0];lines=[{variant:v?v.id:'3-4|14|1',qty:1}]}
-a.innerHTML=`<header><b>SPRUT·CRM</b><span class="small">${esc(me().name)}${me().admin?' (админ)':''} <button onclick="logout()" style="min-height:36px">Выйти</button></span></header><main>${migBanner()}${buyAlert}${Date.now()-FT<5000?flash:''}${({inv:invView,order:orderView,orders:ordersView,hist:histView,set:setView})[view]()}</main>
-<nav>${[['inv','📦 Склад'],['order','➕ Заказ'],['orders','📋 В работе'],['hist','🗂 Архив'],['set','⚙️ Ещё']].map(([v,t])=>`<button class="${view===v?'on':''}" onclick="go('${v}')">${t}</button>`).join('')}</nav>`}
+a.innerHTML=`<header><b>SPRUT·CRM</b><span class="small">${esc(me().name)}${me().admin?' (админ)':''} <button onclick="logout()" style="min-height:36px">Выйти</button></span></header><main>${migBanner()}${buyAlert}${Date.now()-FT<5000?flash:''}${({inv:invView,weld:weldView,order:orderView,orders:ordersView,hist:histView,set:setView})[view]()}</main>
+<nav>${[['inv','📦 Склад'],['weld','🔩 Сварка'],['order','➕ Заказ'],['orders','📋 В работе'],['hist','🗂 Архив'],['set','⚙️ Ещё']].map(([v,t])=>`<button class="${view===v?'on':''}" onclick="go('${v}')">${t}</button>`).join('')}</nav>`}
 const AI='autocapitalize="none" autocorrect="off" spellcheck="false"';
 function authView(){const first=!BOOT;return`<main><form class="card" style="margin-top:12vh" onsubmit="${first?'bootstrap':'login'}();return false"><h2 style="color:var(--acc)">SPRUT·CRM</h2>${flash}
 <p class="small">${first?'Первый запуск: создайте учётную запись администратора.':'Вход только для доверенных лиц. Учётные записи выдаёт администратор.'}</p>
@@ -181,7 +245,7 @@ async function login(){try{await FB.login($('#un').value,$('#pw').value)}catch(e
 async function bootstrap(){const n=$('#un').value.trim(),p=$('#pw').value;if(!n||p.length<6){bad('Логин и пароль (мин. 6 символов)');return render()}try{await FB.bootstrap(n,p)}catch(e){bad(FB.err(e));render()}}
 function logout(){FB.logout()}
 function migBanner(){let html='';
- if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада → схема 3</b><br>Стаканы объединяются по ГГц+разъёмам (без дБи). Заглушка → общие (сумма со втулкой и заглушками по ГГц); втулка удаляется. дБи: 14/16/18/21. Идемпотентно.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему</button></div></div>`;
+ if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада → схема 4</b><br>«Рупор» ×1 на антенну (вместо «Деталь для рупора» ×2). Добавляются «Заготовка рупора» (2 шт = 1 рупор) с остатком 0. Сиды партнёров сварки (Роман, Дмитро) и учётные остатки из таблицы — без изменения склада рупоров. Идемпотентно.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему и сиды</button></div></div>`;
  else if(!me().admin&&needsMig(D))html+=`<div class="msg w">Администратор должен обновить структуру склада. Новые заказы временно недоступны.</div>`;
  if(D._migNotes&&D._migNotes.length)html+=`<div class="msg" style="background:#24401a"><b>Миграция выполнена</b><ul style="margin:6px 0 0;padding-left:18px">${D._migNotes.map(n=>'<li>'+esc(n)+'</li>').join('')}</ul><button onclick="D._migNotes=null;render()" style="margin-top:8px">Скрыть</button></div>`;
  if(me().admin&&D.inventoryApplied!=='2026-11-09')html+=`<div class="msg w"><b>Применить инвентарь 09.11.2026</b><br>Запишет остатки стаканов и рупоров для 5–9 ГГц по таблице (общие детали, 3–4/4–5 ГГц и заглушку не трогает). Каждое изменение — в лог как корректировка.<div class="line" style="margin-top:8px"><button class="p" onclick="doInvApply(false)">Применить инвентарь</button></div></div>`;
@@ -200,12 +264,13 @@ function invView(){const lowN=allKeys(D).filter(k=>cls(k)!=='ok').length,t=D.typ
  if(invTab==='shared'){body=`<div class="card"><h2>Общие комплектующие</h2>${D.shared.map(p=>rowP(p.id,p.name,'мин. '+(D.thr[p.id]||0)+' '+p.unit+' · '+sharedQtyHint(p))).join('')||'<p class="small">Нет деталей</p>'}</div>`}
  else if(t){const ghzParts=(t.parts||[]).map(p=>rowP(t.id+'|'+p.id,p.name,'мин. '+(D.thr[t.id+'|'+p.id]||0)+' · на 1 ант.: '+p.qty)).join('');
   const cups=(t.conns||[]).map(c=>{const ck=t.id+'|'+c+'|cup';return rowP(ck,'Стакан · '+c+' разъём.','общий на весь '+esc(t.name)+' · мин. '+(D.thr[ck]||0))}).join('');
-  const horns=(t.dbis||[]).map(dbi=>{const hk=t.id+'|'+dbi+'|horn';
-   return`<details class="vsec" open><summary>${dbi} дБи ${cls(hk)!=='ok'?'⚠️':''}</summary>${rowP(hk,'Деталь для рупора','×'+(D.vbom?.horn?.qty??2)+' на антенну · мин. '+(D.thr[hk]||0))}</details>`}).join('');
-  body=`<div class="card"><h2>Антенна ${esc(t.name)}</h2><h3>Стаканы (на весь диапазон)</h3>${cups}<h3>Рупоры по дБи</h3>${horns}${ghzParts?`<h3>Прочее</h3>${ghzParts}`:''}</div>`}
+  const horns=(t.dbis||[]).map(dbi=>{const hk=t.id+'|'+dbi+'|horn';const bk=t.id+'|'+dbi+'|blank';
+   const warn=cls(hk)!=='ok'||cls(bk)!=='ok';
+   return`<details class="vsec" open><summary>${dbi} дБи ${warn?'⚠️':''}</summary>${rowP(hk,'Рупор','×'+(D.vbom?.horn?.qty??1)+' на антенну · мин. '+(D.thr[hk]||0))}${rowP(bk,'Заготовка рупора','2 шт = 1 рупор · мин. '+(D.thr[bk]||0))}</details>`}).join('');
+  body=`<div class="card"><h2>Антенна ${esc(t.name)}</h2><h3>Стаканы (на весь диапазон)</h3>${cups}<h3>Рупоры / заготовки по дБи</h3>${horns}${ghzParts?`<h3>Прочее</h3>${ghzParts}`:''}</div>`}
  const buys=openShortfalls();
  return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}${buys.length?`<div class="msg e"><b>Докупить по заказам в работе</b><table style="margin-top:6px"><tr><th>Деталь</th><th>Не хватает</th></tr>${buys.map(p=>`<tr><td>${esc(p.name)}</td><td class="zero">${p.short}</td></tr>`).join('')}</table></div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${warnType(t)?' ⚠️':''}</button>`).join('')}</div>${body}
-<div class="card"><h2>Экспорт остатков</h2><div class="line"><button id="exp-xlsx" onclick="doExport('xlsx')">📊 Excel</button><button id="exp-pdf" onclick="doExport('pdf')">📄 PDF</button></div><p class="small">Структура: общие (вкл. заглушку) → ГГц (стаканы 1/2) → рупоры по дБи.</p></div><div id="dlg"></div>`}
+<div class="card"><h2>Экспорт остатков</h2><div class="line"><button id="exp-xlsx" onclick="doExport('xlsx')">📊 Excel</button><button id="exp-pdf" onclick="doExport('pdf')">📄 PDF</button></div><p class="small">Структура: общие → ГГц (стаканы 1/2) → рупоры и заготовки по дБи. Экспорт может включать остатки сварки.</p></div><div id="dlg"></div>`}
 function warnType(t){return allKeys({types:[t],shared:[],vbom:D.vbom}).some(k=>cls(k)!=='ok')}
 function adjDlg(k){$('#dlg').innerHTML=`<div class="card"><h2>${esc(partName(D,k))}</h2><p>Сейчас: <b>${D.stock[k]||0} ${esc(partUnit(D,k))}</b></p><select id="am"><option value="add">Приход (+ к остатку)</option><option value="set">Корректировка (точный остаток)</option></select>
 <input id="av" type="number" inputmode="decimal" placeholder="Количество, ${esc(partUnit(D,k))}"><input id="an" placeholder="Комментарий (необяз.)"><div class="line"><button onclick="$('#dlg').innerHTML=''">Отмена</button><button class="p" onclick="doAdj('${k}')">Сохранить</button></div></div>`;$('#dlg').scrollIntoView()}
@@ -305,18 +370,19 @@ function adminCards(){const t=D.types.find(x=>x.id===bomTab);if(!t&&bomTab!=='sh
 ${t?`<div class="line"><input value="${esc(t.name)}" onchange="if(this.value.trim()){D.types.find(x=>x.id==='${tid}').name=this.value.trim();saveCfg();render()}"><button class="d" style="flex:0 0 auto" onclick="tDel('${tid}')">Удалить тип</button></div>
 <label class="small">дБи через запятую</label><input value="${(t.dbis||[]).join(',')}" onchange="setDbis('${tid}',this.value)">
 <label class="small">Число разъёмов через запятую</label><input value="${(t.conns||[]).join(',')}" onchange="setConns('${tid}',this.value)">
-<p class="small">Рупор: ГГц+дБи (×${D.vbom?.horn?.qty??2}). Стакан: ГГц+разъёмы, общий для всех дБи (×${D.vbom?.cup?.qty??1}).</p>
+<p class="small">Рупор: ГГц+дБи (×${D.vbom?.horn?.qty??1}). Заготовка: ГГц+дБи (2 шт = 1 рупор на сварку). Стакан: ГГц+разъёмы (×${D.vbom?.cup?.qty??1}).</p>
 <h3>Детали на весь ${esc(t.name)}</h3>`:'<p class="small">Общие детали. CMA = число разъёмов; Заглушка = 1 при 1 разъёме, 0 при 2.</p>'}
 <table><tr><th>Деталь</th><th>Ед.</th><th>На 1</th><th>Мин.</th><th></th></tr>${parts.map(p=>{const k=tid?tid+'|'+p.id:p.id;const qtyShow=(!tid&&(p.id==='cma'||p.id==='cap'))?sharedQtyHint(p):p.qty;
  return`<tr><td><input style="margin:0" value="${esc(p.name)}" onchange="pSet('${tid}','${p.id}','name',this.value)"></td><td><input style="margin:0;width:56px" value="${esc(p.unit)}" onchange="pSet('${tid}','${p.id}','unit',this.value)"></td>
 <td>${(!tid&&(p.id==='cma'||p.id==='cap'))?`<span class="small">${esc(qtyShow)}</span>`:`<input style="margin:0;width:64px" type="number" value="${p.qty}" onchange="pSet('${tid}','${p.id}','qty',this.value)">`}</td>
 <td><input style="margin:0;width:64px" type="number" value="${D.thr[k]||0}" onchange="if(+this.value>=0){D.thr['${k}']=+this.value;saveCfg()}"></td><td><button class="d" onclick="pDel('${tid}','${p.id}')">✕</button></td></tr>`}).join('')}</table>
 <form onsubmit="pAdd('${tid}');return false"><h3>Новая деталь ${t?'для '+esc(t.name):'(общая)'}</h3><input id="pn" placeholder="Название" required><div class="line"><input id="pu" placeholder="Ед. (шт/мл)" value="шт"><input id="pq" type="number" placeholder="На 1 антенну" required><input id="pt" type="number" placeholder="Мин." value="0"></div><button class="p btn-w" type="submit">Добавить деталь</button></form>
-${t?'':`<h3>Нормы рупора / стакана</h3><div class="line"><label class="small">Рупор ×<input type="number" style="margin:0" value="${D.vbom?.horn?.qty??2}" onchange="D.vbom=D.vbom||{};D.vbom.horn=D.vbom.horn||{name:'Деталь для рупора',unit:'шт'};D.vbom.horn.qty=+this.value||2;saveCfg()"></label>
-<label class="small">Стакан ×<input type="number" style="margin:0" value="${D.vbom?.cup?.qty??1}" onchange="D.vbom=D.vbom||{};D.vbom.cup=D.vbom.cup||{name:'Стакан',unit:'шт'};D.vbom.cup.qty=+this.value||1;saveCfg()"></label></div>`}</div>`}
+${t?'':`<h3>Нормы рупора / стакана</h3><div class="line"><label class="small">Рупор ×<input type="number" style="margin:0" value="${D.vbom?.horn?.qty??1}" onchange="D.vbom=D.vbom||{};D.vbom.horn=D.vbom.horn||{name:'Рупор',unit:'шт'};D.vbom.horn.qty=+this.value||1;D.vbom.horn.name='Рупор';saveCfg()"></label>
+<label class="small">Стакан ×<input type="number" style="margin:0" value="${D.vbom?.cup?.qty??1}" onchange="D.vbom=D.vbom||{};D.vbom.cup=D.vbom.cup||{name:'Стакан',unit:'шт'};D.vbom.cup.qty=+this.value||1;saveCfg()"></label></div>
+<p class="small">Заготовка рупора учитывается отдельно (склад ±); на антенну не списывается — только через сварку → рупор.</p>`}</div>${partnersCard()}`}
 function setDbis(tid,val){const t=D.types.find(x=>x.id===tid);const arr=val.split(/[,;\s]+/).map(Number).filter(x=>x>0).sort((a,b)=>a-b);if(!arr.length)return alert('Нужен хотя бы один дБи');
  const removed=(t.dbis||[]).filter(x=>!arr.includes(x));if(removed.length&&!confirm('Удалить варианты дБи '+removed.join(', ')+' и их остатки?'))return render();
- removed.forEach(dbi=>{delete D.stock[tid+'|'+dbi+'|horn'];delete D.thr[tid+'|'+dbi+'|horn']});
+ removed.forEach(dbi=>{delete D.stock[tid+'|'+dbi+'|horn'];delete D.thr[tid+'|'+dbi+'|horn'];delete D.stock[tid+'|'+dbi+'|blank'];delete D.thr[tid+'|'+dbi+'|blank']});
  t.dbis=arr;ensureVariantStock(D,t);saveCfg();ok('дБи обновлены');render()}
 function setConns(tid,val){const t=D.types.find(x=>x.id===tid);const arr=val.split(/[,;\s]+/).map(Number).filter(x=>x>0).sort((a,b)=>a-b);if(!arr.length)return alert('Нужен хотя бы один вариант разъёмов');
  const removed=(t.conns||[]).filter(x=>!arr.includes(x));if(removed.length&&!confirm('Удалить варианты разъёмов '+removed.join(', ')+' и остатки стаканов?'))return render();
@@ -333,8 +399,60 @@ function pAdd(tid){const n=$('#pn').value.trim(),q=$('#pq').value;if(!n||!(+q>=0
 function pDel(tid,pid){if(confirm('Удалить деталь из состава? Её остаток тоже будет удалён.')){removePart(D,tid,pid);saveCfg();render()}}
 function tAdd(){const n=prompt('Название нового типа антенны (напр. 9-10 ГГц):');if(!n||!n.trim())return;const c=confirm('Скопировать варианты и детали из «'+D.types[0].name+'»?');bomTab=addType(D,n.trim(),c?D.types[0].id:null);saveCfg();ok('Тип добавлен');render()}
 function tDel(tid){if(D.types.length<2)return alert('Нужен хотя бы один тип');if(confirm('Удалить тип антенны и все его остатки?')){const t=D.types.find(x=>x.id===tid);
- (t.parts||[]).forEach(p=>{delete D.stock[tid+'|'+p.id];delete D.thr[tid+'|'+p.id]});(t.dbis||[]).forEach(dbi=>{delete D.stock[tid+'|'+dbi+'|horn'];delete D.thr[tid+'|'+dbi+'|horn']});(t.conns||[]).forEach(c=>{delete D.stock[tid+'|'+c+'|cup'];delete D.thr[tid+'|'+c+'|cup']});
+ (t.parts||[]).forEach(p=>{delete D.stock[tid+'|'+p.id];delete D.thr[tid+'|'+p.id]});(t.dbis||[]).forEach(dbi=>{delete D.stock[tid+'|'+dbi+'|horn'];delete D.thr[tid+'|'+dbi+'|horn'];delete D.stock[tid+'|'+dbi+'|blank'];delete D.thr[tid+'|'+dbi+'|blank']});(t.conns||[]).forEach(c=>{delete D.stock[tid+'|'+c+'|cup'];delete D.thr[tid+'|'+c+'|cup']});
  D.types=D.types.filter(x=>x.id!==tid);bomTab='shared';saveCfg();render()}}
+
+function activePartners(){return(D.partners||[]).filter(p=>p.active!==false).sort((a,b)=>coll.compare(a.name,b.name))}
+function weldMap(){const m={};(D.welding||[]).forEach(w=>{m[weldDocId(w.partnerId,w.code)]=w});return m}
+function weldRec(partnerId,code,map){const id=weldDocId(partnerId,code);const w=map[id];
+ if(w)return w;const p=parseWeldCode(code);return{_id:id,partnerId,code,typeId:p.typeId,dbi:p.dbi,conn:p.conn,received:0,returned:0}}
+function partnersCard(){const list=[...(D.partners||[])].sort((a,b)=>coll.compare(a.name,b.name));
+ const ed=partEdit;return`<div class="card"><h2>Партнёры сварки</h2>
+${list.map((p,i)=>`<div class="row"><span><b>${esc(p.name)}</b>${p.active===false?' <span class="zero">архив</span>':''}</span>
+<span class="line" style="flex:0 0 auto"><button onclick="editPartner(${i})">✎</button>${me().admin?`<button onclick="togPartner('${p._id}',${p.active===false})">${p.active===false?'Вернуть':'Архив'}</button><button class="d" onclick="delPartner('${p._id}')">🗑</button>`:''}</span></div>`).join('')||'<p class="small">Партнёров пока нет — обновите схему (сиды Роман/Дмитро).</p>'}
+${ed?`<h3>${ed._id?'Изменить':'Новый партнёр'}</h3><input id="pnw" placeholder="Имя" value="${esc(ed.name||'')}"><div class="line"><button onclick="partEdit=null;render()">Отмена</button><button class="p" onclick="savePartner()">Сохранить</button></div>`
+:`<button class="btn-w" onclick="partEdit={};render()">+ Добавить партнёра</button>`}</div>`}
+function editPartner(i){const list=[...(D.partners||[])].sort((a,b)=>coll.compare(a.name,b.name));const p=list[i];if(!p)return;partEdit={_id:p._id,name:p.name};render()}
+async function savePartner(){try{await FB.savePartner({_id:partEdit&&partEdit._id,name:$('#pnw').value});partEdit=null;ok('Партнёр сохранён')}catch(e){bad(FB.err(e))}render()}
+async function togPartner(id,activate){try{await FB.savePartner({_id:id,active:!!activate});ok(activate?'Партнёр возвращён':'В архиве')}catch(e){bad(FB.err(e))}render()}
+async function delPartner(id){if(!me().admin)return;if(!confirm('Удалить партнёра? Записи сварки останутся.'))return;try{await FB.delPartner(id);ok('Удалён')}catch(e){bad(FB.err(e))}render()}
+function weldView(){if(needsMig(D))return`<div class="card"><p class="small">Сначала обновите схему склада (баннер выше) — появятся партнёры и учёт сварки.</p></div>`;
+ const partners=activePartners();const map=weldMap();
+ const ghzFilter=weldGhz==='sheet'?WELD_SHEET_GHZ:null;
+ let codes=listWeldCodes(D,ghzFilter);
+ if(weldFilter==='rem')codes=codes.filter(c=>partners.some(p=>weldRem(weldRec(p._id,c.code,map))>0));
+ else if(weldFilter==='act')codes=codes.filter(c=>partners.some(p=>{const r=weldRec(p._id,c.code,map);return(+r.received||0)>0||(+r.returned||0)>0}));
+ const totals=partners.map(p=>{let r=0,v=0;codes.forEach(c=>{const rec=weldRec(p._id,c.code,map);r+=(+rec.received||0);v+=(+rec.returned||0)});return{received:r,returned:v,rem:r-v}});
+ const head=`<tr><th>Код</th>${partners.map(p=>`<th colspan="3">${esc(p.name)}</th>`).join('')}</tr>
+<tr><th></th>${partners.map(()=>`<th>Отрим.</th><th>Віддав</th><th>Залиш.</th>`).join('')}</tr>`;
+ const rows=codes.map(c=>{const act=partners.some(p=>{const r=weldRec(p._id,c.code,map);return(+r.received||0)||(+r.returned||0)});
+  return`<tr class="${act?'act':''}"><td><b>${esc(c.code)}</b></td>${partners.map(p=>{const r=weldRec(p._id,c.code,map);const rem=weldRem(r);
+   return`<td>${r.received||0}</td><td>${r.returned||0}</td><td class="${rem?'low':''}">${rem}</td>`}).join('')}</tr>`}).join('');
+ const tot=`<tr class="tot"><td>Разом</td>${totals.map(t=>`<td>${t.received}</td><td>${t.returned}</td><td class="${t.rem?'low':''}">${t.rem}</td>`).join('')}</tr>`;
+ const dlg=weldDlgHtml();
+ return`<div class="card"><h2>Сварка</h2>
+<p class="small">Отримав = отправили партнёру (заготовки ×2 на рупор). Віддав = вернул готовые рупоры на склад. Залишок = ещё у партнёра.</p>
+<div class="line"><button class="p" onclick="weldDlg={mode:'send'};render()">Отправить</button><button class="p" onclick="weldDlg={mode:'recv'};render()">Принять</button></div>
+<div class="line" style="flex-wrap:wrap"><select style="max-width:160px" onchange="weldFilter=this.value;render()"><option value="all" ${weldFilter==='all'?'selected':''}>Все строки</option><option value="act" ${weldFilter==='act'?'selected':''}>С движением</option><option value="rem" ${weldFilter==='rem'?'selected':''}>С остатком</option></select>
+<select style="max-width:160px" onchange="weldGhz=this.value;render()"><option value="sheet" ${weldGhz==='sheet'?'selected':''}>5–9 ГГц (как таблица)</option><option value="all" ${weldGhz==='all'?'selected':''}>Все ГГц</option></select></div>
+<div class="scroll"><table class="weld">${head}${rows||'<tr><td class="small">Нет строк</td></tr>'}${codes.length?tot:''}</table></div>
+<p class="small">Код: ГГц-дБи-разъёмы, напр. 5-6-14-1. Заготовки списываются при «Отправить»; рупоры приходуются при «Принять».</p></div>
+${dlg}<div class="card"><h2>Журнал сварки</h2><table><tr><th>Когда</th><th>Операция</th><th>Кол-во</th></tr>
+${(D.weldingLog||[]).slice(0,40).map(l=>`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(l.kind)} · ${esc(l.partnerName||'')} · ${esc(l.code)}</td><td>${l.qty||''}</td></tr>`).join('')||'<tr><td colspan="3" class="small">Пусто</td></tr>'}</table></div>`}
+function weldDlgHtml(){if(!weldDlg)return'<div id="wdlg"></div>';
+ const partners=activePartners();const codes=listWeldCodes(D,weldGhz==='sheet'?WELD_SHEET_GHZ:null);
+ const mode=weldDlg.mode;const title=mode==='send'?'Отправить на сварку':'Принять рупоры';
+ return`<div class="card" id="wdlg"><h2>${title}</h2>
+<label class="small">Партнёр</label><select id="wpartner">${partners.map(p=>`<option value="${p._id}">${esc(p.name)}</option>`).join('')||'<option value="">—</option>'}</select>
+<label class="small">Вариант (код)</label><select id="wcode">${codes.map(c=>`<option value="${c.code}">${esc(c.code)}</option>`).join('')}</select>
+<label class="small">Количество (рупоров / пар)</label><input id="wqty" type="number" min="1" step="1" value="1">
+${mode==='send'?'<p class="small">Спишется 2×N заготовок (можно в минус по учёту — как недосдача в заказах).</p>':'<p class="small">Не больше остатка у партнёра. Рупоры добавятся на склад.</p>'}
+<div class="line"><button onclick="weldDlg=null;render()">Отмена</button><button class="p" onclick="doWeld()">${mode==='send'?'Отправить':'Принять'}</button></div></div>`}
+async function doWeld(){const pid=$('#wpartner')&&$('#wpartner').value,code=$('#wcode')&&$('#wcode').value,qty=$('#wqty')&&$('#wqty').value;
+ try{if(weldDlg.mode==='send'){const r=await FB.weldSend(pid,code,qty);ok('Отправлено '+r.n+' · заготовок −'+r.deducted+(r.short?' (недост. '+r.short+')':''))}
+  else{const r=await FB.weldRecv(pid,code,qty);ok('Принято '+r.m+' рупоров · остаток у партнёра '+r.remainder)}
+  weldDlg=null}catch(e){bad(FB.err?FB.err(e):e.message||e)}render()}
+
 function backup(){return`<div class="card"><h2>Резервная копия</h2><button class="btn-w" onclick="exp()">⬇ Экспорт JSON</button><label class="small">Импорт JSON:</label><input type="file" accept=".json" onchange="imp(this.files[0])"></div>`}
 function exp(){const b=new Blob([JSON.stringify({...D,users:undefined},null,1)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sprut-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click()}
 function imp(f){if(!f)return;f.text().then(async t=>{const n=JSON.parse(t);if(!n.stock)throw 0;if(confirm('Заменить облачные данные этой копией?')){await FB.importLocal(migrate(n));ok('Импортировано');render()}}).catch(()=>{bad('Неверный файл');render()})}
