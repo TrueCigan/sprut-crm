@@ -148,7 +148,7 @@ function auth(d,login,pw){const u=d.users.find(x=>x.login.trim().toLowerCase()==
 /*ENDCORE*/
 
 let D=null,U=null,ME=null,STATUS='loading',BOOT=false,view='inv',invTab='shared',bomTab='shared',lines=[],flash='',PENDING=false,FT=0;
-let oFilter='',oSort='deadline',oDir=1,hFilter='',hSort='ts',hDir=-1,cliEdit=null,deadMode='days',deadDays=7,orderOpen=null,buyAlert='';
+let oFilter='',oSort='deadline',oDir=1,hFilter='',hSort='ts',hDir=-1,cliEdit=null,deadMode='days',deadDays=7,orderOpen=null,logOpen=null,buyAlert='';
 const me=()=>(D&&ME&&D.users.find(u=>u.uid===ME.uid))||ME||{};
 const saveCfg=()=>FB.saveConfig().catch(e=>{bad('Ошибка сохранения: '+FB.err(e));render()});
 function remote(){const a=document.activeElement;if(document.querySelector('nav')&&a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)&&a.type!=='file'){PENDING=true;return}render()}
@@ -255,6 +255,17 @@ ${list.map(o=>orderRow(o,'active')).join('')||'<tr><td colspan="7" class="small"
 <p class="small">Строка заказа — раскрыть списание. ✓ выполнен · ✕ отмена (возврат списанного).</p></div>`}
 async function doComplete(oid){if(!confirm('Отметить заказ выполненным?'))return;try{await FB.completeOrder(oid);ok('Заказ выполнен')}catch(e){bad(FB.err(e))}render()}
 async function doCancel(oid){if(!confirm('Отменить заказ и вернуть комплектующие на склад?'))return;try{await FB.cancelOrder(oid);ok('Заказ отменён, детали возвращены')}catch(e){bad(FB.err(e))}render()}
+function groupStockLog(log){const items=[],idx=new Map();const re=/^(Заказ|Отмена)\s*#(\d+)/;
+ (log||[]).slice(0,400).forEach(l=>{const m=String(l.kind||'').match(re);
+  if(m){const key=m[1]+'#'+m[2];if(idx.has(key)){const g=items[idx.get(key)];g.lines.push(l);g.net+=(+l.delta||0)}
+   else{idx.set(key,items.length);items.push({type:'group',key,label:m[1]+' #'+m[2],action:m[1],oid:+m[2],ts:l.ts,user:l.user,lines:[l],net:+l.delta||0})}}
+  else items.push({type:'row',line:l})});return items}
+function logRowsHtml(){const items=groupStockLog(D.log);if(!items.length)return'<tr><td class="small">Пусто</td></tr>';
+ return items.map(it=>{if(it.type==='row'){const l=it.line;return`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(l.name||partName(D,l.key))}<br><span class="small">${esc(l.kind)}</span></td><td class="${l.delta<0?'low':'ok'}">${l.delta>0?'+':''}${l.delta}</td></tr>`}
+  const open=logOpen===it.key;const netCls=it.net<0?'low':it.net>0?'ok':'';
+  const head=`<tr style="cursor:pointer" onclick="logOpen=logOpen==='${it.key}'?null:'${it.key}';render()"><td class="small">${fmt(it.ts)}<br>${esc(it.user)}</td><td><b>${esc(it.label)}</b> · ${it.lines.length} поз.<br><span class="small">${open?'▲ свернуть':'▼ детали списания'}</span></td><td class="${netCls}">${it.net>0?'+':''}${it.net}</td></tr>`;
+  const detail=open?`<tr><td colspan="3" style="background:#161b20"><table><tr><th>Деталь</th><th>Изменение</th><th class="small">Метка</th></tr>${it.lines.map(l=>`<tr><td>${esc(l.name||partName(D,l.key))}</td><td class="${l.delta<0?'low':'ok'}">${l.delta>0?'+':''}${l.delta}</td><td class="small">${esc(l.kind)}</td></tr>`).join('')}</table></td></tr>`:'';
+  return head+detail}).join('')}
 function histView(){const list=sortOrders((D.orders||[]).filter(o=>orderStatus(o)!=='active'),hSort,hDir,hFilter);
  return`<div class="card"><h2>Архив заказов</h2>
 <div class="line"><input placeholder="Поиск по клиенту…" value="${esc(hFilter)}" oninput="hFilter=this.value;render()"><select style="max-width:140px" onchange="hSort=this.value;render()"><option value="ts" ${hSort==='ts'?'selected':''}>Дата</option><option value="deadline" ${hSort==='deadline'?'selected':''}>Срок</option><option value="client" ${hSort==='client'?'selected':''}>Клиент</option></select>
@@ -263,7 +274,7 @@ function histView(){const list=sortOrders((D.orders||[]).filter(o=>orderStatus(o
 <div class="scroll"><table><tr><th>#</th><th>Клиент</th><th>Антенны</th><th>Создан</th><th>Срок</th><th>Статус</th><th>Кто</th></tr>
 ${list.map(o=>orderRow(o,'hist')).join('')||'<tr><td colspan="7" class="small">Пусто</td></tr>'}</table></div>
 <p class="small">Один заказ — одна строка. Нажмите, чтобы увидеть списанные детали.</p></div>
-<div class="card"><h2>Движение склада</h2><table>${(D.log||[]).slice(0,200).map(l=>`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(l.name||partName(D,l.key))}<br><span class="small">${esc(l.kind)}</span></td><td class="${l.delta<0?'low':'ok'}">${l.delta>0?'+':''}${l.delta}</td></tr>`).join('')||'<tr><td class="small">Пусто</td></tr>'}</table></div>`}
+<div class="card"><h2>Движение склада</h2><p class="small">Заказы и отмены — одна строка; нажмите, чтобы увидеть детали. Приход и корректировки — отдельно.</p><table><tr><th>Когда / кто</th><th>Операция</th><th>Итого</th></tr>${logRowsHtml()}</table></div>`}
 function setView(){return clientsCard()+(me().admin?adminCards():'<div class="card"><p>Настройки BOM доступны администратору.</p></div>')+backup()}
 function clientsCard(){const list=[...(D.clients||[])].sort((a,b)=>coll.compare(a.name,b.name));
  const ed=cliEdit;return`<div class="card"><h2>Клиенты</h2>
