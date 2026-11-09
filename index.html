@@ -4,66 +4,130 @@
 :root{--bg:#12161a;--card:#1c2228;--line:#2c353d;--acc:#8fbf3f;--warn:#e0a030;--bad:#e0503c;--tx:#e6e9ec;--mut:#8a96a0}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,sans-serif;padding-bottom:80px}
 header{position:sticky;top:0;background:#0d1013;border-bottom:2px solid var(--acc);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;z-index:5}
-header b{letter-spacing:2px;color:var(--acc)}main{padding:12px;max-width:640px;margin:auto}
+header b{letter-spacing:2px;color:var(--acc)}main{padding:12px;max-width:720px;margin:auto}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
 h2{font-size:18px;margin:8px 0}h3{font-size:15px;color:var(--mut);margin:12px 0 6px;text-transform:uppercase;letter-spacing:1px}
 .row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);gap:8px}.row:last-child{border:0}
 .low{color:var(--warn);font-weight:700}.zero{color:var(--bad);font-weight:700}.ok{color:var(--acc)}
-button,select,input{font:inherit;min-height:48px;border-radius:10px;border:1px solid var(--line);background:#252d34;color:var(--tx);padding:0 14px}
-input,select{width:100%;margin:4px 0 10px}button.p{background:var(--acc);color:#111;font-weight:700;border:0}button.d{background:var(--bad);border:0}
-.btn-w{width:100%;margin-top:6px}nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0d1013;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-nav button{flex:1;border:0;border-radius:0;background:none;min-height:64px;font-size:13px;color:var(--mut)}nav button.on{color:var(--acc);border-top:3px solid var(--acc)}
+button,select,input,textarea{font:inherit;min-height:48px;border-radius:10px;border:1px solid var(--line);background:#252d34;color:var(--tx);padding:0 14px}
+input,select,textarea{width:100%;margin:4px 0 10px}textarea{padding:10px 14px;min-height:80px}button.p{background:var(--acc);color:#111;font-weight:700;border:0}button.d{background:var(--bad);border:0}
+.btn-w{width:100%;margin-top:6px}nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0d1013;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;border:0;border-radius:0;background:none;min-height:64px;font-size:11px;color:var(--mut);padding:4px 2px}nav button.on{color:var(--acc);border-top:3px solid var(--acc)}
 .tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:8px}.tabs button{flex:0 0 auto}.tabs button.on{background:var(--acc);color:#111}
 .small{font-size:13px;color:var(--mut)}.line{display:flex;gap:8px}.line>*{flex:1}.msg{padding:10px;border-radius:8px;margin:8px 0}.msg.w{background:#4a3510}.msg.e{background:#4a1a14}
-table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+tr.over td{background:#3a1814}tr.near td{background:#3a2e10}.chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}
+.chip.a{background:#2a4018;color:var(--acc)}.chip.d{background:#1a3040;color:#7ec8e0}.chip.c{background:#402018;color:#e08070}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}details.vsec{border:1px solid var(--line);border-radius:10px;margin:8px 0;padding:0 10px}details.vsec>summary{padding:12px 0;cursor:pointer;font-weight:700;list-style:none}details.vsec>summary::-webkit-details-marker{display:none}
 </style></head><body><div id="app"></div>
 <script>
 /*CORE*/
 const TYPES=['3-4','4-5','5-6','6-7','7-8','8-9'];
-const TPARTS=[{id:'horn',name:'Деталь для рупора',unit:'шт'},{id:'cup',name:'Стакан',unit:'шт'},{id:'cap',name:'Заглушка',unit:'шт'}];
-const SPARTS=[{id:'m24',name:'Винт М24',unit:'шт'},{id:'cma',name:'CMA разъём',unit:'шт'},{id:'primer',name:'Грунт',unit:'мл'},{id:'paint',name:'Краска',unit:'мл'}];
+const DEFAULT_DBIS=[14,18],DEFAULT_CONNS=[1,2];
+const coll=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function seed(){const stock={},thr={};const tv={'3-4':[40,20,20],'4-5':[30,15,3],'5-6':[6,10,10],'6-7':[24,12,12],'7-8':[0,4,4],'8-9':[18,9,9]};
-TYPES.forEach(t=>TPARTS.forEach((p,i)=>{stock[t+'|'+p.id]=tv[t][i];thr[t+'|'+p.id]=p.id==='horn'?10:5}));
-Object.assign(stock,{m24:250,cma:12,primer:3000,paint:800});Object.assign(thr,{m24:80,cma:10,primer:1000,paint:1000});
-return migrate({users:[],stock,thr,bom:{horn:2,cup:1,cap:1,m24:8,cma:1,primer:50,paint:50},orders:[],log:[]})}
-function migrate(d){if(!d.types){const b=d.bom||{};d.types=TYPES.map(t=>({id:t,name:t+' ГГц',parts:TPARTS.map(p=>({id:p.id,name:p.name,unit:p.unit,qty:b[p.id]??1}))}));
-d.shared=SPARTS.map(p=>({...p,qty:b[p.id]??1}));delete d.bom}
-d.users=(d.users||[]).map(u=>({login:u.login||u.name,name:u.name||u.login,pw:u.pw,admin:!!u.admin,disabled:!!u.disabled}));d.stock=d.stock||{};d.thr=d.thr||{};d.orders=d.orders||[];d.log=d.log||[];return d}
+TYPES.forEach(t=>{stock[t+'|14|horn']=tv[t][0];thr[t+'|14|horn']=10;stock[t+'|14|1|cup']=tv[t][1];thr[t+'|14|1|cup']=5;
+ stock[t+'|14|2|cup']=0;thr[t+'|14|2|cup']=5;stock[t+'|18|horn']=0;thr[t+'|18|horn']=10;stock[t+'|18|1|cup']=0;thr[t+'|18|1|cup']=5;stock[t+'|18|2|cup']=0;thr[t+'|18|2|cup']=5;
+ stock[t+'|cap']=tv[t][2];thr[t+'|cap']=5});
+Object.assign(stock,{m24:250,cma:12,bush:30,primer:3000,paint:800});Object.assign(thr,{m24:80,cma:10,bush:10,primer:1000,paint:1000});
+return{schema:2,types:TYPES.map(t=>({id:t,name:t+' ГГц',dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[{id:'cap',name:'Заглушка',unit:'шт',qty:1}]})),
+ shared:[{id:'m24',name:'Винт М24',unit:'шт',qty:8},{id:'cma',name:'CMA разъём',unit:'шт',qty:1},{id:'bush',name:'Втулка',unit:'шт',qty:1},{id:'primer',name:'Грунт',unit:'мл',qty:50},{id:'paint',name:'Краска',unit:'мл',qty:50}],
+ vbom:{horn:{name:'Деталь для рупора',unit:'шт',qty:2},cup:{name:'Стакан',unit:'шт',qty:1}},thr,stock,orders:[],log:[],users:[]}}
+function migrate(d){if(!d.types){const b=d.bom||{};d.types=TYPES.map(t=>({id:t,name:t+' ГГц',parts:[{id:'horn',name:'Деталь для рупора',unit:'шт',qty:b.horn??2},{id:'cup',name:'Стакан',unit:'шт',qty:b.cup??1},{id:'cap',name:'Заглушка',unit:'шт',qty:b.cap??1}]}));
+ d.shared=[{id:'m24',name:'Винт М24',unit:'шт',qty:b.m24??8},{id:'cma',name:'CMA разъём',unit:'шт',qty:b.cma??1},{id:'primer',name:'Грунт',unit:'мл',qty:b.primer??50},{id:'paint',name:'Краска',unit:'мл',qty:b.paint??50}];delete d.bom}
+d.users=(d.users||[]).map(u=>({login:u.login||u.name,name:u.name||u.login,pw:u.pw,admin:!!u.admin,disabled:!!u.disabled}));d.stock=d.stock||{};d.thr=d.thr||{};d.orders=d.orders||[];d.log=d.log||[];d.shared=d.shared||[];return d}
+function needsMig(d){if(!d||!d.types||!d.types.length)return false;if(!d.schema||d.schema<2)return true;if(!d.vbom)return true;if(!d.shared.some(p=>p.id==='bush'))return true;
+ return d.types.some(t=>!t.dbis||!t.conns||(t.parts||[]).some(p=>p.id==='horn'||p.id==='cup')||Object.keys(d.stock).some(k=>k===t.id+'|horn'||k===t.id+'|cup'))}
+function migrateV2(d){const notes=[];d.vbom=d.vbom||{horn:{name:'Деталь для рупора',unit:'шт',qty:2},cup:{name:'Стакан',unit:'шт',qty:1}};
+ if(!d.shared.some(p=>p.id==='bush')){d.shared.push({id:'bush',name:'Втулка',unit:'шт',qty:1});if(d.stock.bush==null)d.stock.bush=0;if(d.thr.bush==null)d.thr.bush=10;notes.push('Добавлена общая деталь «Втулка»: 1 шт на антенну с 1 разъёмом, 0 при 2 разъёмах.')}
+ // CMA note
+ if(!notes.some(n=>n.includes('CMA')))notes.push('CMA: количество = числу разъёмов варианта (1 или 2). Заглушка остаётся на весь диапазон ГГц.');
+ d.types.forEach(t=>{if(!Array.isArray(t.dbis)||!t.dbis.length)t.dbis=[...DEFAULT_DBIS];if(!Array.isArray(t.conns)||!t.conns.length)t.conns=[...DEFAULT_CONNS];
+  t.dbis=t.dbis.map(Number).filter(x=>x>0).sort((a,b)=>a-b);t.conns=t.conns.map(Number).filter(x=>x>0).sort((a,b)=>a-b);
+  const hadHornCup=(t.parts||[]).some(p=>p.id==='horn'||p.id==='cup');
+  if(hadHornCup)t.parts=(t.parts||[]).filter(p=>p.id!=='horn'&&p.id!=='cup');
+  const firstDbi=t.dbis[0],firstConn=t.conns.includes(1)?1:t.conns[0];
+  const oh=t.id+'|horn',oc=t.id+'|cup';
+  if(d.stock[oh]!=null){const nk=t.id+'|'+firstDbi+'|horn';d.stock[nk]=(d.stock[nk]||0)+d.stock[oh];const q=d.stock[oh];delete d.stock[oh];
+   if(d.thr[oh]!=null){d.thr[nk]=d.thr[oh];delete d.thr[oh]}notes.push(t.name+': «Деталь для рупора» ('+q+') → вариант '+firstDbi+' дБи.')}
+  if(d.stock[oc]!=null){const nk=t.id+'|'+firstDbi+'|'+firstConn+'|cup';d.stock[nk]=(d.stock[nk]||0)+d.stock[oc];const q=d.stock[oc];delete d.stock[oc];
+   if(d.thr[oc]!=null){d.thr[nk]=d.thr[oc];delete d.thr[oc]}notes.push(t.name+': «Стакан» ('+q+') → '+firstDbi+' дБи / '+firstConn+' разъём.')}
+  t.dbis.forEach(dbi=>{const hk=t.id+'|'+dbi+'|horn';if(d.stock[hk]==null)d.stock[hk]=0;if(d.thr[hk]==null)d.thr[hk]=10;
+   t.conns.forEach(c=>{const ck=t.id+'|'+dbi+'|'+c+'|cup';if(d.stock[ck]==null)d.stock[ck]=0;if(d.thr[ck]==null)d.thr[ck]=5})});
+  (t.parts||[]).forEach(p=>{const k=t.id+'|'+p.id;if(d.stock[k]==null)d.stock[k]=0;if(d.thr[k]==null)d.thr[k]=5})});
+ d.schema=2;return{notes:[...new Set(notes)]}}
 const uid=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
-function findPart(d,k){const[a,b]=k.split('|');if(b!==undefined){const t=d.types.find(x=>x.id===a);const p=t&&t.parts.find(x=>x.id===b);return{t,p}}return{p:d.shared.find(x=>x.id===a)}}
-function partName(d,k){const{t,p}=findPart(d,k);if(!p)return k+' (удалено)';return p.name+(t?' ('+t.name+')':'')}
+function sharedQty(p,conn){if(p.id==='cma')return +conn;if(p.id==='bush')return +conn===1?1:0;return +p.qty||0}
+function sharedQtyHint(p){if(p.id==='cma')return '=число разъёмов';if(p.id==='bush')return '1 при 1 разъёме, 0 при 2';return 'на 1 ант.: '+p.qty}
+function parseVariant(l){if(typeof l==='string'){const p=l.split('|');return{typeId:p[0],dbi:+p[1],conn:+p[2]}}
+ if(l.variant){const p=String(l.variant).split('|');return{typeId:p[0],dbi:+p[1],conn:+p[2]}}
+ return{typeId:l.type,dbi:+l.dbi||14,conn:+l.conn||1}}
+function variantLabel(typeId,dbi,conn){return typeId+' '+dbi+' ('+conn+')'}
+function listVariants(d){const out=[];[...d.types].sort((a,b)=>ghz(a)-ghz(b)||coll.compare(a.name,b.name)).forEach(t=>{(t.dbis||DEFAULT_DBIS).forEach(dbi=>{(t.conns||DEFAULT_CONNS).forEach(conn=>{
+ out.push({id:t.id+'|'+dbi+'|'+conn,label:variantLabel(t.id,dbi,conn),typeId:t.id,dbi,conn,group:t.name})})})});return out}
+function ghz(t){const m=String(t.name||t.id).match(/\d+([.,]\d+)?/);return m?parseFloat(m[0].replace(',','.')):1e9}
+function findPart(d,k){const p=String(k).split('|');
+ if(p.length===1)return{p:(d.shared||[]).find(x=>x.id===p[0])};
+ if(p.length===2){const t=(d.types||[]).find(x=>x.id===p[0]);return{t,p:t&&(t.parts||[]).find(x=>x.id===p[1])}};
+ if(p.length===3&&p[2]==='horn'){const t=(d.types||[]).find(x=>x.id===p[0]);const vb=(d.vbom||{}).horn||{name:'Деталь для рупора',unit:'шт',qty:2};return{t,p:{...vb,id:'horn'},dbi:+p[1],kind:'horn'}}
+ if(p.length===4&&p[3]==='cup'){const t=(d.types||[]).find(x=>x.id===p[0]);const vb=(d.vbom||{}).cup||{name:'Стакан',unit:'шт',qty:1};return{t,p:{...vb,id:'cup'},dbi:+p[1],conn:+p[2],kind:'cup'}}
+ return{p:null}}
+function partName(d,k){const f=findPart(d,k);if(!f.p)return k+' (удалено)';
+ if(f.kind==='horn')return f.p.name+' ('+(f.t?f.t.name:p0(k))+', '+f.dbi+' дБи)';
+ if(f.kind==='cup')return f.p.name+' ('+(f.t?f.t.name:p0(k))+', '+f.dbi+' дБи, '+f.conn+' разъём.)';
+ return f.p.name+(f.t?' ('+f.t.name+')':'')}
+function p0(k){return String(k).split('|')[0]}
 function partUnit(d,k){const{p}=findPart(d,k);return p?p.unit:''}
-function requirements(d,lines){const r={};lines.forEach(l=>{const q=+l.qty;const t=d.types.find(x=>x.id===l.type);if(!(q>0)||!t)return;
-t.parts.forEach(p=>{const k=t.id+'|'+p.id;r[k]=(r[k]||0)+p.qty*q});d.shared.forEach(p=>{r[p.id]=(r[p.id]||0)+p.qty*q})});
-return Object.keys(r).filter(k=>r[k]>0).map(k=>({key:k,need:r[k],have:d.stock[k]||0,short:Math.max(0,r[k]-(d.stock[k]||0))}))}
-function placeOrder(d,lines,user,note){const req=requirements(d,lines);if(!req.length)throw Error('Пустой заказ');if(req.some(x=>x.short>0))throw Error('Недостаточно комплектующих');
-const id=(d.orders.length?d.orders[0].id:0)+1,ts=new Date().toISOString();req.forEach(x=>{d.stock[x.key]=(d.stock[x.key]||0)-x.need;d.log.unshift({ts,user,key:x.key,name:partName(d,x.key),delta:-x.need,kind:'Заказ #'+id})});
-d.orders.unshift({id,ts,user,note:note||'',lines:lines.filter(l=>+l.qty>0).map(l=>({type:l.type,name:(d.types.find(x=>x.id===l.type)||{}).name,qty:+l.qty}))});return id}
+function requirements(d,lines){const r={};const vb=d.vbom||{horn:{qty:2},cup:{qty:1}};
+ lines.forEach(l=>{const q=+l.qty;if(!(q>0))return;const{typeId,dbi,conn}=parseVariant(l);const t=(d.types||[]).find(x=>x.id===typeId);if(!t)return;
+  const hk=typeId+'|'+dbi+'|horn';r[hk]=(r[hk]||0)+(vb.horn?.qty??2)*q;
+  const ck=typeId+'|'+dbi+'|'+conn+'|cup';r[ck]=(r[ck]||0)+(vb.cup?.qty??1)*q;
+  (t.parts||[]).forEach(p=>{const k=typeId+'|'+p.id;r[k]=(r[k]||0)+(+p.qty||0)*q});
+  (d.shared||[]).forEach(p=>{const sq=sharedQty(p,conn);if(sq>0)r[p.id]=(r[p.id]||0)+sq*q})});
+ return Object.keys(r).filter(k=>r[k]>0).map(k=>({key:k,need:r[k],have:d.stock[k]||0,short:Math.max(0,r[k]-(d.stock[k]||0))}))}
+function placeOrder(d,lines,user,meta){meta=meta||{};const req=requirements(d,lines);if(!req.length)throw Error('Пустой заказ');if(req.some(x=>x.short>0))throw Error('Недостаточно комплектующих');
+ if(!meta.clientId&&!meta.clientName)throw Error('Выберите клиента');if(!meta.deadline)throw Error('Укажите срок');
+ const id=(d.orders.length?d.orders[0].id:0)+1,ts=new Date().toISOString();
+ req.forEach(x=>{d.stock[x.key]=(d.stock[x.key]||0)-x.need;d.log.unshift({ts,user,key:x.key,name:partName(d,x.key),delta:-x.need,kind:'Заказ #'+id})});
+ const flines=lines.filter(l=>+l.qty>0).map(l=>{const{typeId,dbi,conn}=parseVariant(l);return{variant:typeId+'|'+dbi+'|'+conn,type:typeId,dbi,conn,label:variantLabel(typeId,dbi,conn),name:variantLabel(typeId,dbi,conn),qty:+l.qty}});
+ d.orders.unshift({id,ts,user,status:'active',clientId:meta.clientId||'',clientName:meta.clientName||'',deadline:meta.deadline,note:meta.note||'',lines:flines});return id}
 function adjust(d,key,val,mode,user,note){const old=d.stock[key]||0,nv=mode==='set'?+val:old+(+val);if(val===''||isNaN(nv)||nv<0)throw Error('Неверное значение');d.stock[key]=nv;
-d.log.unshift({ts:new Date().toISOString(),user,key,name:partName(d,key),delta:nv-old,kind:(mode==='set'?'Корректировка':'Приход')+(note?': '+note:'')})}
+ d.log.unshift({ts:new Date().toISOString(),user,key,name:partName(d,key),delta:nv-old,kind:(mode==='set'?'Корректировка':'Приход')+(note?': '+note:'')})}
 function addPart(d,typeId,name,unit,qty,thr){const p={id:uid(),name,unit:unit||'шт',qty:+qty||0};let k;if(typeId){d.types.find(x=>x.id===typeId).parts.push(p);k=typeId+'|'+p.id}else{d.shared.push(p);k=p.id}d.stock[k]=0;d.thr[k]=+thr||0;return k}
 function removePart(d,typeId,pid){if(typeId){const t=d.types.find(x=>x.id===typeId);t.parts=t.parts.filter(p=>p.id!==pid);pid=typeId+'|'+pid}else d.shared=d.shared.filter(p=>p.id!==pid);delete d.stock[pid];delete d.thr[pid]}
-function addType(d,name,copyFrom){const t={id:'t'+Date.now().toString(36),name,parts:[]};const src=d.types.find(x=>x.id===copyFrom);
-if(src)src.parts.forEach(p=>{t.parts.push({...p});d.stock[t.id+'|'+p.id]=0;d.thr[t.id+'|'+p.id]=d.thr[src.id+'|'+p.id]||0});d.types.push(t);return t.id}
+function addType(d,name,copyFrom){const t={id:'t'+Date.now().toString(36),name,dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]};const src=d.types.find(x=>x.id===copyFrom);
+ if(src){t.dbis=[...(src.dbis||DEFAULT_DBIS)];t.conns=[...(src.conns||DEFAULT_CONNS)];(src.parts||[]).forEach(p=>{t.parts.push({...p});d.stock[t.id+'|'+p.id]=0;d.thr[t.id+'|'+p.id]=d.thr[src.id+'|'+p.id]||0});
+  t.dbis.forEach(dbi=>{d.stock[t.id+'|'+dbi+'|horn']=0;d.thr[t.id+'|'+dbi+'|horn']=10;t.conns.forEach(c=>{d.stock[t.id+'|'+dbi+'|'+c+'|cup']=0;d.thr[t.id+'|'+dbi+'|'+c+'|cup']=5})})}
+ d.types.push(t);return t.id}
+function ensureVariantStock(d,t){(t.dbis||[]).forEach(dbi=>{const hk=t.id+'|'+dbi+'|horn';if(d.stock[hk]==null)d.stock[hk]=0;if(d.thr[hk]==null)d.thr[hk]=10;
+  (t.conns||[]).forEach(c=>{const ck=t.id+'|'+dbi+'|'+c+'|cup';if(d.stock[ck]==null)d.stock[ck]=0;if(d.thr[ck]==null)d.thr[ck]=5})})}
+function allKeys(d){const keys=(d.shared||[]).map(p=>p.id);(d.types||[]).forEach(t=>{(t.parts||[]).forEach(p=>keys.push(t.id+'|'+p.id));
+ (t.dbis||[]).forEach(dbi=>{keys.push(t.id+'|'+dbi+'|horn');(t.conns||[]).forEach(c=>keys.push(t.id+'|'+dbi+'|'+c+'|cup'))})});return keys}
+function orderStatus(o){return o.status||'done'}
+function daysLeft(deadline){if(!deadline)return null;const end=new Date(deadline+'T23:59:59');
+ const now=new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Warsaw'}));
+ return Math.ceil((end-now)/86400000)}
 function hash(s){let h=5381;for(const c of s)h=(h*33^c.charCodeAt(0))>>>0;return h.toString(16)}
 function auth(d,login,pw){const u=d.users.find(x=>x.login.trim().toLowerCase()===login.trim().toLowerCase());if(!u||u.pw!==hash(pw))return{err:'Неверный логин или пароль'};if(u.disabled)return{err:'Доступ отключён администратором'};return{u}}
 /*ENDCORE*/
 let D=null,U=null,ME=null,STATUS='loading',BOOT=false,view='inv',invTab='shared',bomTab='shared',lines=[],flash='',PENDING=false,FT=0;
+let oFilter='',oSort='deadline',oDir=1,hFilter='',hSort='ts',hDir=-1,cliEdit=null,deadMode='days',deadDays=7;
 const me=()=>(D&&ME&&D.users.find(u=>u.uid===ME.uid))||ME||{};
 const saveCfg=()=>FB.saveConfig().catch(e=>{bad('Ошибка сохранения: '+FB.err(e));render()});
-// re-render on remote updates, but not while the user is typing
 function remote(){const a=document.activeElement;if(document.querySelector('nav')&&a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)&&a.type!=='file'){PENDING=true;return}render()}
 document.addEventListener('focusout',()=>setTimeout(()=>{if(PENDING){PENDING=false;remote()}},50));
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt=ts=>new Date(ts).toLocaleString('ru-RU',{dateStyle:'short',timeStyle:'short'});const ok=m=>(FT=Date.now(),flash=`<div class="msg" style="background:#24401a">✔ ${m}</div>`),bad=m=>(FT=Date.now(),flash=`<div class="msg e">${m}</div>`);
-
+const fmt=ts=>new Date(ts).toLocaleString('ru-RU',{timeZone:'Europe/Warsaw',dateStyle:'short',timeStyle:'short'});
+const fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('ru-RU',{timeZone:'Europe/Warsaw'}):'—';
+const ok=m=>(FT=Date.now(),flash=`<div class="msg" style="background:#24401a">✔ ${m}</div>`),bad=m=>(FT=Date.now(),flash=`<div class="msg e">${m}</div>`);
 function cls(k){const v=D.stock[k]||0;return v<=0?'zero':v<=(D.thr[k]||0)?'low':'ok'}
-function allKeys(){return[...D.shared.map(p=>p.id),...D.types.flatMap(t=>t.parts.map(p=>t.id+'|'+p.id))]}
 function render(){const a=$('#app');if(STATUS==='loading'){a.innerHTML='<main><div class="card" style="margin-top:20vh;text-align:center">Загрузка…</div></main>';return}
 if(STATUS==='noconfig'){a.innerHTML='<main><div class="card msg e" style="margin-top:20vh">Не настроен firebase-config.js</div></main>';return}
-if(!U||!D){a.innerHTML=authView();flash='';return}if(!lines.length)lines=[{type:D.types[0].id,qty:1}];
-a.innerHTML=`<header><b>SPRUT·CRM</b><span class="small">${esc(me().name)}${me().admin?' (админ)':''} <button onclick="logout()" style="min-height:36px">Выйти</button></span></header><main>${migBanner()}${Date.now()-FT<5000?flash:''}${({inv:invView,order:orderView,hist:histView,set:setView})[view]()}</main>
-<nav>${[['inv','📦 Склад'],['order','➕ Заказ'],['hist','📋 История'],['set','⚙️ Настройки']].map(([v,t])=>`<button class="${view===v?'on':''}" onclick="go('${v}')">${t}</button>`).join('')}</nav>`}
+if(!U||!D){a.innerHTML=authView();flash='';return}
+if(!lines.length){const v=listVariants(D)[0];lines=[{variant:v?v.id:'3-4|14|1',qty:1}]}
+a.innerHTML=`<header><b>SPRUT·CRM</b><span class="small">${esc(me().name)}${me().admin?' (админ)':''} <button onclick="logout()" style="min-height:36px">Выйти</button></span></header><main>${migBanner()}${Date.now()-FT<5000?flash:''}${({inv:invView,order:orderView,orders:ordersView,hist:histView,set:setView})[view]()}</main>
+<nav>${[['inv','📦 Склад'],['order','➕ Заказ'],['orders','📋 В работе'],['hist','🗂 Архив'],['set','⚙️ Ещё']].map(([v,t])=>`<button class="${view===v?'on':''}" onclick="go('${v}')">${t}</button>`).join('')}</nav>`}
 const AI='autocapitalize="none" autocorrect="off" spellcheck="false"';
 function authView(){const first=!BOOT;return`<main><form class="card" style="margin-top:12vh" onsubmit="${first?'bootstrap':'login'}();return false"><h2 style="color:var(--acc)">SPRUT·CRM</h2>${flash}
 <p class="small">${first?'Первый запуск: создайте учётную запись администратора.':'Вход только для доверенных лиц. Учётные записи выдаёт администратор.'}</p>
@@ -72,51 +136,132 @@ function authView(){const first=!BOOT;return`<main><form class="card" style="mar
 async function login(){try{await FB.login($('#un').value,$('#pw').value)}catch(e){bad(FB.err(e));render()}}
 async function bootstrap(){const n=$('#un').value.trim(),p=$('#pw').value;if(!n||p.length<6){bad('Логин и пароль (мин. 6 символов)');return render()}try{await FB.bootstrap(n,p)}catch(e){bad(FB.err(e));render()}}
 function logout(){FB.logout()}
-function migBanner(){if(!me().admin||localStorage.getItem('sprut_migrated'))return'';let o;try{o=JSON.parse(localStorage.getItem('sprut_crm_v1'))}catch(e){}if(!o||!o.stock)return'';
-return`<div class="msg w">На этом устройстве есть локальные данные прошлой версии (${(o.orders||[]).length} заказов). <div class="line" style="margin-top:8px"><button class="p" onclick="doMig()">Импортировать в облако</button><button onclick="localStorage.setItem('sprut_migrated','skip');render()">Не нужно</button></div></div>`}
+function migBanner(){let html='';
+ if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада (варианты дБи / разъёмы)</b><br>Остатки «Деталь для рупора» и «Стакан» по ГГц будут перенесены в первый вариант <b>14 дБи</b> и стакан с <b>1 разъёмом</b>. Добавится «Втулка». Операция безопасна и идемпотентна.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему</button></div></div>`;
+ else if(!me().admin&&needsMig(D))html+=`<div class="msg w">Администратор должен обновить структуру склада. Новые заказы временно недоступны.</div>`;
+ if(D._migNotes&&D._migNotes.length)html+=`<div class="msg" style="background:#24401a"><b>Миграция выполнена</b><ul style="margin:6px 0 0;padding-left:18px">${D._migNotes.map(n=>'<li>'+esc(n)+'</li>').join('')}</ul><button onclick="D._migNotes=null;render()" style="margin-top:8px">Скрыть</button></div>`;
+ if(me().admin&&!localStorage.getItem('sprut_migrated')){let o;try{o=JSON.parse(localStorage.getItem('sprut_crm_v1'))}catch(e){}
+  if(o&&o.stock)html+=`<div class="msg w">Локальные данные прошлой версии (${(o.orders||[]).length} заказов). <div class="line" style="margin-top:8px"><button class="p" onclick="doMig()">Импортировать в облако</button><button onclick="localStorage.setItem('sprut_migrated','skip');render()">Не нужно</button></div></div>`}
+ return html}
+async function doSchemaMig(){try{const notes=await FB.migrateSchema();ok('Схема обновлена');D._migNotes=notes}catch(e){bad(FB.err(e))}render()}
 async function doMig(){if(!confirm('Заменить облачный склад, состав и историю данными этого устройства? (Пользователей нужно будет добавить заново.)'))return;try{await FB.importLocal(migrate(JSON.parse(localStorage.getItem('sprut_crm_v1'))));localStorage.setItem('sprut_migrated','1');ok('Импортировано')}catch(e){bad(FB.err(e))}render()}
 function go(v){view=v;render();scrollTo(0,0)}
-function rowP(k,p){return`<div class="row"><span>${esc(p.name)}<br><span class="small">мин. ${D.thr[k]||0} ${esc(p.unit)} · на 1 ант.: ${p.qty}</span></span><span class="${cls(k)}" style="font-size:20px">${D.stock[k]||0} ${esc(p.unit)}</span><button onclick="adjDlg('${k}')">±</button></div>`}
-function invView(){const lowN=allKeys().filter(k=>cls(k)!=='ok').length,t=D.types.find(x=>x.id===invTab);if(!t)invTab='shared';
-return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${t.parts.some(p=>cls(t.id+'|'+p.id)!=='ok')?' ⚠️':''}</button>`).join('')}</div>
-<div class="card"><h2>${t?'Антенна '+esc(t.name):'Общие комплектующие'}</h2>${(t?t.parts.map(p=>rowP(t.id+'|'+p.id,p)):D.shared.map(p=>rowP(p.id,p))).join('')||'<p class="small">Нет деталей</p>'}</div><div class="card"><h2>Экспорт остатков</h2><div class="line"><button id="exp-xlsx" onclick="doExport('xlsx')">📊 Excel</button><button id="exp-pdf" onclick="doExport('pdf')">📄 PDF</button></div><p class="small">Все детали: общие, затем по типам антенн.</p></div><div id="dlg"></div>`}
+function rowP(k,label,extra){return`<div class="row"><span>${esc(label)}${extra?'<br><span class="small">'+extra+'</span>':''}</span><span class="${cls(k)}" style="font-size:20px">${D.stock[k]||0} ${esc(partUnit(D,k))}</span><button onclick="adjDlg('${k}')">±</button></div>`}
+function invView(){const lowN=allKeys(D).filter(k=>cls(k)!=='ok').length,t=D.types.find(x=>x.id===invTab);if(!t&&invTab!=='shared')invTab='shared';
+ let body='';
+ if(invTab==='shared'){body=`<div class="card"><h2>Общие комплектующие</h2>${D.shared.map(p=>rowP(p.id,p.name,'мин. '+(D.thr[p.id]||0)+' '+p.unit+' · '+sharedQtyHint(p))).join('')||'<p class="small">Нет деталей</p>'}</div>`}
+ else if(t){const ghzParts=(t.parts||[]).map(p=>rowP(t.id+'|'+p.id,p.name,'мин. '+(D.thr[t.id+'|'+p.id]||0)+' · на 1 ант.: '+p.qty)).join('');
+  const vars=(t.dbis||[]).map(dbi=>{const hk=t.id+'|'+dbi+'|horn';const cups=(t.conns||[]).map(c=>{const ck=t.id+'|'+dbi+'|'+c+'|cup';return rowP(ck,'Стакан · '+c+' разъём.','мин. '+(D.thr[ck]||0))}).join('');
+   return`<details class="vsec" open><summary>${dbi} дБи ${(cls(hk)!=='ok'||(t.conns||[]).some(c=>cls(t.id+'|'+dbi+'|'+c+'|cup')!=='ok'))?'⚠️':''}</summary>${rowP(hk,'Деталь для рупора','×'+(D.vbom?.horn?.qty??2)+' на антенну · мин. '+(D.thr[hk]||0))}${cups}</details>`}).join('');
+  body=`<div class="card"><h2>Антенна ${esc(t.name)}</h2><h3>На весь диапазон</h3>${ghzParts||'<p class="small">Нет общих для ГГц деталей</p>'}<h3>По усилению (дБи)</h3>${vars}</div>`}
+ return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${warnType(t)?' ⚠️':''}</button>`).join('')}</div>${body}
+<div class="card"><h2>Экспорт остатков</h2><div class="line"><button id="exp-xlsx" onclick="doExport('xlsx')">📊 Excel</button><button id="exp-pdf" onclick="doExport('pdf')">📄 PDF</button></div><p class="small">Структура: общие → ГГц → варианты дБи / разъёмы.</p></div><div id="dlg"></div>`}
+function warnType(t){return allKeys({types:[t],shared:[],vbom:D.vbom}).some(k=>cls(k)!=='ok')}
 function adjDlg(k){$('#dlg').innerHTML=`<div class="card"><h2>${esc(partName(D,k))}</h2><p>Сейчас: <b>${D.stock[k]||0} ${esc(partUnit(D,k))}</b></p><select id="am"><option value="add">Приход (+ к остатку)</option><option value="set">Корректировка (точный остаток)</option></select>
 <input id="av" type="number" inputmode="decimal" placeholder="Количество, ${esc(partUnit(D,k))}"><input id="an" placeholder="Комментарий (необяз.)"><div class="line"><button onclick="$('#dlg').innerHTML=''">Отмена</button><button class="p" onclick="doAdj('${k}')">Сохранить</button></div></div>`;$('#dlg').scrollIntoView()}
 async function doAdj(k){try{await FB.adjust(k,$('#av').value,$('#am').value,$('#an').value.trim());ok('Сохранено')}catch(e){bad(FB.err(e))}render()}
-function orderView(){lines.forEach(l=>{if(!D.types.find(t=>t.id===l.type))l.type=D.types[0].id});
-return`<div class="card"><h2>Новый заказ</h2>${lines.map((l,i)=>`<div class="line"><select onchange="lines[${i}].type=this.value;render()">${D.types.map(t=>`<option ${t.id===l.type?'selected':''} value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
-<input type="number" inputmode="numeric" min="1" value="${l.qty}" oninput="lines[${i}].qty=this.value;updPrev()" style="max-width:90px"><button style="flex:0 0 48px" onclick="lines.splice(${i},1);if(!lines.length)lines.push({type:D.types[0].id,qty:1});render()">✕</button></div>`).join('')}
-<button class="btn-w" onclick="lines.push({type:D.types[0].id,qty:1});render()">+ Добавить позицию</button><input id="on" placeholder="Клиент / комментарий"></div>
-<div id="prev">${prevHtml()}</div>`}
-function prevHtml(){const req=requirements(D,lines),sh=req.some(x=>x.short>0);return`<div class="card"><h2>Потребуется</h2><table><tr><th>Деталь</th><th>Нужно</th><th>Есть</th></tr>${req.map(x=>`<tr><td>${esc(partName(D,x.key))}</td><td>${x.need}</td><td class="${x.short?'zero':'ok'}">${x.have}${x.short?' (−'+x.short+')':''}</td></tr>`).join('')}</table>
-${sh?'<div class="msg e">⛔ Не хватает комплектующих — заказ нельзя провести. Сделайте приход на складе.</div>':''}<button id="confirm" class="p btn-w" ${sh||!req.length?'disabled style="opacity:.4"':''} onclick="doOrder()">Подтвердить и списать</button></div>`}
+function orderView(){if(needsMig(D))return`<div class="card"><p class="small">Сначала обновите схему склада (баннер выше).</p></div>`;
+ const vars=listVariants(D);const clients=[...(D.clients||[])].sort((a,b)=>coll.compare(a.name,b.name));
+ lines.forEach(l=>{if(!vars.find(v=>v.id===l.variant))l.variant=vars[0]?vars[0].id:'3-4|14|1'});
+ const groups=[...new Set(vars.map(v=>v.group))];
+ return`<div class="card"><h2>Новый заказ</h2>
+<label class="small">Клиент</label><div class="line"><select id="oclient">${clients.map(c=>`<option value="${c._id}">${esc(c.name)}${c.phone?' · '+esc(c.phone):''}</option>`).join('')||'<option value="">— нет клиентов —</option>'}</select>
+<button style="flex:0 0 auto" onclick="cliEdit={};view='set';render()">+ Клиент</button></div>
+<label class="small">Срок</label><div class="line"><select id="dmode" onchange="deadMode=this.value;updDead()"><option value="days" ${deadMode==='days'?'selected':''}>Через N дней</option><option value="date" ${deadMode==='date'?'selected':''}>Дата</option></select>
+<span id="dfield">${deadMode==='days'?`<input id="ddays" type="number" min="1" value="${deadDays}" oninput="deadDays=+this.value||1">`:`<input id="ddate" type="date" value="${defaultDeadline()}">`}</span></div>
+${lines.map((l,i)=>`<div class="line" style="flex-wrap:wrap"><select style="flex:2" onchange="lines[${i}].variant=this.value;updPrev()">${groups.map(g=>`<optgroup label="${esc(g)}">${vars.filter(v=>v.group===g).map(v=>`<option value="${v.id}" ${v.id===l.variant?'selected':''}>${esc(v.label)}</option>`).join('')}</optgroup>`).join('')}</select>
+<input type="number" inputmode="numeric" min="1" value="${l.qty}" oninput="lines[${i}].qty=this.value;updPrev()" style="max-width:90px"><button style="flex:0 0 48px" onclick="lines.splice(${i},1);if(!lines.length)lines.push({variant:vars[0].id,qty:1});render()">✕</button></div>`).join('')}
+<button class="btn-w" onclick="lines.push({variant:listVariants(D)[0].id,qty:1});render()">+ Добавить позицию</button>
+<input id="on" placeholder="Комментарий (необяз.)"></div><div id="prev">${prevHtml()}</div>`}
+function defaultDeadline(){const d=new Date();d.setDate(d.getDate()+(deadDays||7));return d.toISOString().slice(0,10)}
+function updDead(){const f=$('#dfield');if(!f)return;f.innerHTML=deadMode==='days'?`<input id="ddays" type="number" min="1" value="${deadDays}" oninput="deadDays=+this.value||1">`:`<input id="ddate" type="date" value="${defaultDeadline()}">`}
+function resolveDeadline(){if(deadMode==='date'){const v=$('#ddate')&&$('#ddate').value;if(!v)throw Error('Укажите дату срока');return v}
+ const n=+(($('#ddays')&&$('#ddays').value)||deadDays||7);if(!(n>0))throw Error('Укажите число дней');const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
+function prevHtml(){const req=requirements(D,lines),sh=req.some(x=>x.short>0);return`<div class="card"><h2>Потребуется (резерв при создании)</h2><table><tr><th>Деталь</th><th>Нужно</th><th>Есть</th></tr>${req.map(x=>`<tr><td>${esc(partName(D,x.key))}</td><td>${x.need}</td><td class="${x.short?'zero':'ok'}">${x.have}${x.short?' (−'+x.short+')':''}</td></tr>`).join('')}</table>
+${sh?'<div class="msg e">⛔ Не хватает комплектующих — заказ нельзя провести.</div>':''}<button id="confirm" class="p btn-w" ${sh||!req.length?'disabled style="opacity:.4"':''} onclick="doOrder()">Подтвердить и списать</button></div>`}
 function updPrev(){const p=$('#prev');if(p)p.innerHTML=prevHtml()}
-async function doOrder(){$('#confirm').disabled=true;try{const id=await FB.order(lines,$('#on').value.trim());lines=[{type:D.types[0].id,qty:1}];ok(`Заказ #${id} проведён, комплектующие списаны`);view='hist'}catch(e){bad(FB.err(e))}render()}
-function histView(){return`<div class="card"><h2>Заказы</h2>${D.orders.map(o=>`<div class="row"><span><b>#${o.id}</b> ${o.lines.map(l=>l.qty+'× '+esc(l.name||l.type+' ГГц')).join(', ')}<br><span class="small">${fmt(o.ts)} · ${esc(o.user)}${o.note?' · '+esc(o.note):''}</span></span></div>`).join('')||'<p class="small">Заказов пока нет</p>'}</div>
-<div class="card"><h2>Движение склада</h2><table>${D.log.slice(0,200).map(l=>`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(l.name||partName(D,l.key))}<br><span class="small">${esc(l.kind)}</span></td><td class="${l.delta<0?'low':'ok'}">${l.delta>0?'+':''}${l.delta}</td></tr>`).join('')||'<tr><td class="small">Пусто</td></tr>'}</table></div>`}
-function setView(){if(!me().admin)return'<div class="card"><p>Настройки доступны только администратору.</p></div>'+backup();
-const t=D.types.find(x=>x.id===bomTab);if(!t)bomTab='shared';const parts=t?t.parts:D.shared,tid=t?t.id:'';
-return`<div class="card"><h2>Доверенные лица</h2>${D.users.map((u,i)=>`<div class="row"><span>${esc(u.login)}${u.admin?' (админ)':''}${u.active===false?' <span class="zero">отключён</span>':''}</span>
+async function doOrder(){const btn=$('#confirm');if(btn)btn.disabled=true;
+ try{const cid=$('#oclient')&&$('#oclient').value;const cl=(D.clients||[]).find(c=>c._id===cid);if(!cl)throw Error('Сначала добавьте клиента');
+  const deadline=resolveDeadline();const id=await FB.order(lines,{clientId:cl._id,clientName:cl.name,deadline,note:($('#on')&&$('#on').value.trim())||''});
+  lines=[{variant:listVariants(D)[0].id,qty:1}];ok(`Заказ #${id} в работе, комплектующие списаны`);view='orders'}catch(e){bad(FB.err?FB.err(e):e.message||e)}render()}
+function linesSummary(o){return(o.lines||[]).map(l=>l.qty+'× '+(l.label||l.name||l.variant||(l.type+' ГГц'))).join(', ')}
+function dlCell(o){const st=orderStatus(o);if(st!=='active')return fmtD(o.deadline);
+ const d=daysLeft(o.deadline);if(d==null)return'—';if(d<0)return`<span class="zero">просрочен ${-d}д</span>`;if(d<=2)return`<span class="low">${d}д</span>`;return d+'д'}
+function stChip(o){const s=orderStatus(o);return s==='active'?'<span class="chip a">В работе</span>':s==='cancelled'?'<span class="chip c">Отменён</span>':'<span class="chip d">Выполнен</span>'}
+function sortOrders(list,sort,dir,filter){let a=list.filter(o=>{if(!filter)return true;const q=filter.toLowerCase();return(o.clientName||'').toLowerCase().includes(q)||String(o.id).includes(q)||(o.note||'').toLowerCase().includes(q)});
+ a.sort((x,y)=>{let r=0;if(sort==='deadline')r=String(x.deadline||'').localeCompare(String(y.deadline||''));
+  else if(sort==='ts')r=String(x.ts||'').localeCompare(String(y.ts||''));
+  else if(sort==='client')r=coll.compare(x.clientName||'',y.clientName||'');
+  else r=x.id-y.id;return r*dir});return a}
+function ordersView(){const list=sortOrders((D.orders||[]).filter(o=>orderStatus(o)==='active'),oSort,oDir,oFilter);
+ return`<div class="card"><h2>Заказы в работе</h2>
+<div class="line"><input id="ofilt" placeholder="Поиск по клиенту…" value="${esc(oFilter)}" oninput="oFilter=this.value;render()"><select style="max-width:140px" onchange="oSort=this.value;render()"><option value="deadline" ${oSort==='deadline'?'selected':''}>Срок</option><option value="ts" ${oSort==='ts'?'selected':''}>Создан</option><option value="client" ${oSort==='client'?'selected':''}>Клиент</option></select>
+<button style="flex:0 0 48px" onclick="oDir*=-1;render()">${oDir>0?'↑':'↓'}</button></div>
+<div class="scroll"><table><tr><th>#</th><th>Клиент</th><th>Антенны</th><th>Создан</th><th>Срок</th><th>Ост.</th><th></th></tr>
+${list.map(o=>{const d=daysLeft(o.deadline);const rowCls=d!=null&&d<0?'over':d!=null&&d<=2?'near':'';
+ return`<tr class="${rowCls}"><td>${o.id}</td><td>${esc(o.clientName||'—')}<br><span class="small">${esc(o.user||'')}</span></td><td>${esc(linesSummary(o))}</td><td class="small">${fmt(o.ts)}</td><td>${fmtD(o.deadline)}</td><td>${dlCell(o)}</td>
+<td><button style="min-height:36px" onclick="doComplete('${o._id}')">✓</button> <button class="d" style="min-height:36px" onclick="doCancel('${o._id}')">✕</button></td></tr>`}).join('')||'<tr><td colspan="7" class="small">Нет заказов в работе</td></tr>'}</table></div>
+<p class="small">✓ — выполнен (в архив). ✕ — отмена с возвратом комплектующих.</p></div>`}
+async function doComplete(oid){if(!confirm('Отметить заказ выполненным?'))return;try{await FB.completeOrder(oid);ok('Заказ выполнен')}catch(e){bad(FB.err(e))}render()}
+async function doCancel(oid){if(!confirm('Отменить заказ и вернуть комплектующие на склад?'))return;try{await FB.cancelOrder(oid);ok('Заказ отменён, детали возвращены')}catch(e){bad(FB.err(e))}render()}
+function histView(){const list=sortOrders((D.orders||[]).filter(o=>orderStatus(o)!=='active'),hSort,hDir,hFilter);
+ return`<div class="card"><h2>Архив заказов</h2>
+<div class="line"><input placeholder="Поиск по клиенту…" value="${esc(hFilter)}" oninput="hFilter=this.value;render()"><select style="max-width:140px" onchange="hSort=this.value;render()"><option value="ts" ${hSort==='ts'?'selected':''}>Дата</option><option value="deadline" ${hSort==='deadline'?'selected':''}>Срок</option><option value="client" ${hSort==='client'?'selected':''}>Клиент</option></select>
+<button style="flex:0 0 48px" onclick="hDir*=-1;render()">${hDir>0?'↑':'↓'}</button></div>
+<div class="line"><button id="exp-ord-xlsx" onclick="doOrdersExport('xlsx')">📊 Excel</button><button id="exp-ord-pdf" onclick="doOrdersExport('pdf')">📄 PDF</button></div>
+<div class="scroll"><table><tr><th>#</th><th>Клиент</th><th>Антенны</th><th>Создан</th><th>Срок</th><th>Статус</th><th>Кто</th></tr>
+${list.map(o=>`<tr><td>${o.id}</td><td>${esc(o.clientName||o.note||'—')}</td><td>${esc(linesSummary(o))}</td><td class="small">${fmt(o.ts)}</td><td class="small">${fmtD(o.deadline)}</td><td>${stChip(o)}${o.doneAt?'<br><span class="small">'+fmt(o.doneAt)+'</span>':o.cancelledAt?'<br><span class="small">'+fmt(o.cancelledAt)+'</span>':''}</td><td class="small">${esc(o.user||'')}</td></tr>`).join('')||'<tr><td colspan="7" class="small">Пусто</td></tr>'}</table></div></div>
+<div class="card"><h2>Движение склада</h2><table>${(D.log||[]).slice(0,200).map(l=>`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(l.name||partName(D,l.key))}<br><span class="small">${esc(l.kind)}</span></td><td class="${l.delta<0?'low':'ok'}">${l.delta>0?'+':''}${l.delta}</td></tr>`).join('')||'<tr><td class="small">Пусто</td></tr>'}</table></div>`}
+function setView(){return clientsCard()+(me().admin?adminCards():'<div class="card"><p>Настройки BOM доступны администратору.</p></div>')+backup()}
+function clientsCard(){const list=[...(D.clients||[])].sort((a,b)=>coll.compare(a.name,b.name));
+ const ed=cliEdit;return`<div class="card"><h2>Клиенты</h2>
+${list.map((c,i)=>`<div class="row"><span><b>${esc(c.name)}</b>${c.contact?' · '+esc(c.contact):''}${c.phone?'<br><span class="small">'+esc(c.phone)+'</span>':''}${c.notes?'<br><span class="small">'+esc(c.notes)+'</span>':''}</span>
+<span class="line" style="flex:0 0 auto"><button onclick="editCli(${i})">✎</button>${me().admin?`<button class="d" onclick="delCli('${c._id}')">🗑</button>`:''}</span></div>`).join('')||'<p class="small">Клиентов пока нет</p>'}
+${ed?`<h3>${ed._id?'Изменить':'Новый клиент'}</h3><input id="cn" placeholder="Имя / компания" value="${esc(ed.name||'')}"><input id="cc" placeholder="Контактное лицо" value="${esc(ed.contact||'')}"><input id="cp" placeholder="Телефон" value="${esc(ed.phone||'')}"><textarea id="cnote" placeholder="Заметки">${esc(ed.notes||'')}</textarea>
+<div class="line"><button onclick="cliEdit=null;render()">Отмена</button><button class="p" onclick="saveCli()">Сохранить</button></div>`:`<button class="btn-w" onclick="cliEdit={};render()">+ Добавить клиента</button>`}</div>`}
+function editCli(i){const list=[...(D.clients||[])].sort((a,b)=>coll.compare(a.name,b.name));const c=list[i];if(!c)return;cliEdit={_id:c._id,name:c.name,contact:c.contact||'',phone:c.phone||'',notes:c.notes||''};render()}
+async function saveCli(){try{await FB.saveClient({_id:cliEdit&&cliEdit._id,name:$('#cn').value,contact:$('#cc').value,phone:$('#cp').value,notes:$('#cnote').value});cliEdit=null;ok('Клиент сохранён')}catch(e){bad(FB.err(e))}render()}
+async function delCli(id){if(!confirm('Удалить клиента? Заказы останутся.'))return;try{await FB.delClient(id);ok('Удалён')}catch(e){bad(FB.err(e))}render()}
+function adminCards(){const t=D.types.find(x=>x.id===bomTab);if(!t&&bomTab!=='shared')bomTab='shared';const parts=t?t.parts:D.shared,tid=t?t.id:'';
+ return`<div class="card"><h2>Доверенные лица</h2>${D.users.map((u,i)=>`<div class="row"><span>${esc(u.login)}${u.admin?' (админ)':''}${u.active===false?' <span class="zero">отключён</span>':''}</span>
 <span class="line" style="flex:0 0 auto"><button onclick="uPw(${i})">🔑</button>${u.uid!==ME.uid?`<button onclick="uTog(${i})">${u.active===false?'Вкл':'Выкл'}</button><button class="d" onclick="uDel(${i})">🗑</button>`:''}</span></div>`).join('')}
 <form onsubmit="uAdd();return false"><h3>Добавить</h3><input id="nl" ${AI} placeholder="Логин" required><input id="np" type="password" autocomplete="new-password" placeholder="Пароль (мин. 6)" required><label class="small"><input id="na" type="checkbox" style="width:auto;min-height:auto"> администратор</label><button class="p btn-w" type="submit">Добавить пользователя</button></form></div>
-<div class="card"><h2>Состав антенн (BOM)</h2><div class="tabs"><button class="${bomTab==='shared'?'on':''}" onclick="bomTab='shared';render()">Общие</button>${D.types.map(x=>`<button class="${bomTab===x.id?'on':''}" onclick="bomTab='${x.id}';render()">${esc(x.name)}</button>`).join('')}<button onclick="tAdd()">+ Тип</button></div>
-${t?`<div class="line"><input value="${esc(t.name)}" onchange="if(this.value.trim()){D.types.find(x=>x.id==='${tid}').name=this.value.trim();saveCfg();render()}"><button class="d" style="flex:0 0 auto" onclick="tDel('${tid}')">Удалить тип</button></div>`:'<p class="small">Общие детали расходуются на каждую антенну любого типа.</p>'}
-<table><tr><th>Деталь</th><th>Ед.</th><th>На 1</th><th>Мин.</th><th></th></tr>${parts.map(p=>{const k=tid?tid+'|'+p.id:p.id;return`<tr><td><input style="margin:0" value="${esc(p.name)}" onchange="pSet('${tid}','${p.id}','name',this.value)"></td><td><input style="margin:0;width:56px" value="${esc(p.unit)}" onchange="pSet('${tid}','${p.id}','unit',this.value)"></td>
-<td><input style="margin:0;width:64px" type="number" value="${p.qty}" onchange="pSet('${tid}','${p.id}','qty',this.value)"></td><td><input style="margin:0;width:64px" type="number" value="${D.thr[k]||0}" onchange="if(+this.value>=0){D.thr['${k}']=+this.value;saveCfg()}"></td><td><button class="d" onclick="pDel('${tid}','${p.id}')">✕</button></td></tr>`}).join('')}</table>
-<form onsubmit="pAdd('${tid}');return false"><h3>Новая деталь ${t?'для '+esc(t.name):'(общая)'}</h3><input id="pn" placeholder="Название" required><div class="line"><input id="pu" placeholder="Ед. (шт/мл)" value="шт"><input id="pq" type="number" placeholder="На 1 антенну" required><input id="pt" type="number" placeholder="Мин." value="0"></div><button class="p btn-w" type="submit">Добавить деталь</button></form></div>${backup()}`}
+<div class="card"><h2>Состав и варианты</h2><div class="tabs"><button class="${bomTab==='shared'?'on':''}" onclick="bomTab='shared';render()">Общие</button>${D.types.map(x=>`<button class="${bomTab===x.id?'on':''}" onclick="bomTab='${x.id}';render()">${esc(x.name)}</button>`).join('')}<button onclick="tAdd()">+ Тип</button></div>
+${t?`<div class="line"><input value="${esc(t.name)}" onchange="if(this.value.trim()){D.types.find(x=>x.id==='${tid}').name=this.value.trim();saveCfg();render()}"><button class="d" style="flex:0 0 auto" onclick="tDel('${tid}')">Удалить тип</button></div>
+<label class="small">дБи через запятую</label><input value="${(t.dbis||[]).join(',')}" onchange="setDbis('${tid}',this.value)">
+<label class="small">Число разъёмов через запятую</label><input value="${(t.conns||[]).join(',')}" onchange="setConns('${tid}',this.value)">
+<p class="small">Рупор зависит от ГГц+дБи (×${D.vbom?.horn?.qty??2}). Стакан — от ГГц+дБи+разъёмов (×${D.vbom?.cup?.qty??1}).</p>
+<h3>Детали на весь ${esc(t.name)}</h3>`:'<p class="small">Общие детали. CMA = число разъёмов, Втулка = 1 при одном разъёме.</p>'}
+<table><tr><th>Деталь</th><th>Ед.</th><th>На 1</th><th>Мин.</th><th></th></tr>${parts.map(p=>{const k=tid?tid+'|'+p.id:p.id;const qtyShow=(!tid&&(p.id==='cma'||p.id==='bush'))?sharedQtyHint(p):p.qty;
+ return`<tr><td><input style="margin:0" value="${esc(p.name)}" onchange="pSet('${tid}','${p.id}','name',this.value)"></td><td><input style="margin:0;width:56px" value="${esc(p.unit)}" onchange="pSet('${tid}','${p.id}','unit',this.value)"></td>
+<td>${(!tid&&(p.id==='cma'||p.id==='bush'))?`<span class="small">${esc(qtyShow)}</span>`:`<input style="margin:0;width:64px" type="number" value="${p.qty}" onchange="pSet('${tid}','${p.id}','qty',this.value)">`}</td>
+<td><input style="margin:0;width:64px" type="number" value="${D.thr[k]||0}" onchange="if(+this.value>=0){D.thr['${k}']=+this.value;saveCfg()}"></td><td><button class="d" onclick="pDel('${tid}','${p.id}')">✕</button></td></tr>`}).join('')}</table>
+<form onsubmit="pAdd('${tid}');return false"><h3>Новая деталь ${t?'для '+esc(t.name):'(общая)'}</h3><input id="pn" placeholder="Название" required><div class="line"><input id="pu" placeholder="Ед. (шт/мл)" value="шт"><input id="pq" type="number" placeholder="На 1 антенну" required><input id="pt" type="number" placeholder="Мин." value="0"></div><button class="p btn-w" type="submit">Добавить деталь</button></form>
+${t?'':`<h3>Нормы рупора / стакана</h3><div class="line"><label class="small">Рупор ×<input type="number" style="margin:0" value="${D.vbom?.horn?.qty??2}" onchange="D.vbom=D.vbom||{};D.vbom.horn=D.vbom.horn||{name:'Деталь для рупора',unit:'шт'};D.vbom.horn.qty=+this.value||2;saveCfg()"></label>
+<label class="small">Стакан ×<input type="number" style="margin:0" value="${D.vbom?.cup?.qty??1}" onchange="D.vbom=D.vbom||{};D.vbom.cup=D.vbom.cup||{name:'Стакан',unit:'шт'};D.vbom.cup.qty=+this.value||1;saveCfg()"></label></div>`}</div>`}
+function setDbis(tid,val){const t=D.types.find(x=>x.id===tid);const arr=val.split(/[,;\s]+/).map(Number).filter(x=>x>0).sort((a,b)=>a-b);if(!arr.length)return alert('Нужен хотя бы один дБи');
+ const removed=(t.dbis||[]).filter(x=>!arr.includes(x));if(removed.length&&!confirm('Удалить варианты дБи '+removed.join(', ')+' и их остатки?'))return render();
+ removed.forEach(dbi=>{delete D.stock[tid+'|'+dbi+'|horn'];delete D.thr[tid+'|'+dbi+'|horn'];(t.conns||[]).forEach(c=>{delete D.stock[tid+'|'+dbi+'|'+c+'|cup'];delete D.thr[tid+'|'+dbi+'|'+c+'|cup']})});
+ t.dbis=arr;ensureVariantStock(D,t);saveCfg();ok('дБи обновлены');render()}
+function setConns(tid,val){const t=D.types.find(x=>x.id===tid);const arr=val.split(/[,;\s]+/).map(Number).filter(x=>x>0).sort((a,b)=>a-b);if(!arr.length)return alert('Нужен хотя бы один вариант разъёмов');
+ const removed=(t.conns||[]).filter(x=>!arr.includes(x));if(removed.length&&!confirm('Удалить варианты разъёмов '+removed.join(', ')+' и остатки стаканов?'))return render();
+ removed.forEach(c=>(t.dbis||[]).forEach(dbi=>{delete D.stock[tid+'|'+dbi+'|'+c+'|cup'];delete D.thr[tid+'|'+dbi+'|'+c+'|cup']}));
+ t.conns=arr;ensureVariantStock(D,t);saveCfg();ok('Разъёмы обновлены');render()}
 async function uAdd(){const l=$('#nl').value.trim(),p=$('#np').value;if(!l||p.length<6){bad('Логин и пароль (мин. 6 символов)');return render()}if(D.users.some(u=>u.login.toLowerCase()===l.toLowerCase())){bad('Такой логин уже есть');return render()}
-try{await FB.createUser(l,p,$('#na').checked);ok('Пользователь '+esc(l)+' добавлен')}catch(e){bad(FB.err(e))}render()}
-async function uPw(i){const u=D.users[i];if(u.uid!==ME.uid)return alert('Пароль другого пользователя меняется в Firebase Console → Authentication. Либо отключите этого пользователя и создайте новый логин.');
-const p=prompt('Новый пароль (мин. 6 символов):');if(p==null)return;if(p.length<6){bad('Слишком короткий пароль');return render()}try{await FB.changeMyPassword(p);ok('Пароль изменён')}catch(e){bad(FB.err(e))}render()}
+ try{await FB.createUser(l,p,$('#na').checked);ok('Пользователь '+esc(l)+' добавлен')}catch(e){bad(FB.err(e))}render()}
+async function uPw(i){const u=D.users[i];if(u.uid!==ME.uid)return alert('Пароль другого пользователя меняется в Firebase Console → Authentication.');
+ const p=prompt('Новый пароль (мин. 6 символов):');if(p==null)return;if(p.length<6){bad('Слишком короткий пароль');return render()}try{await FB.changeMyPassword(p);ok('Пароль изменён')}catch(e){bad(FB.err(e))}render()}
 function uTog(i){FB.setUser(D.users[i].uid,{active:D.users[i].active===false}).catch(e=>{bad(FB.err(e));render()})}
-function uDel(i){if(confirm('Удалить пользователя '+D.users[i].login+'? Вход будет запрещён.'))FB.delUser(D.users[i].uid).catch(e=>{bad(FB.err(e));render()})}
+function uDel(i){if(confirm('Удалить пользователя '+D.users[i].login+'?'))FB.delUser(D.users[i].uid).catch(e=>{bad(FB.err(e));render()})}
 function pSet(tid,pid,f,v){const p=(tid?D.types.find(x=>x.id===tid).parts:D.shared).find(x=>x.id===pid);if(f==='qty'){if(!(+v>=0))return;v=+v}else{v=v.trim();if(!v)return}p[f]=v;saveCfg()}
-function pAdd(tid){const n=$('#pn').value.trim(),q=$('#pq').value;if(!n||!(+q>=0)){bad('Укажите название и количество');return render()}addPart(D,tid,n,$('#pu').value.trim(),q,$('#pt').value);saveCfg();ok('Деталь «'+esc(n)+'» добавлена (остаток 0 — сделайте приход на складе)');render()}
+function pAdd(tid){const n=$('#pn').value.trim(),q=$('#pq').value;if(!n||!(+q>=0)){bad('Укажите название и количество');return render()}addPart(D,tid,n,$('#pu').value.trim(),q,$('#pt').value);saveCfg();ok('Деталь «'+esc(n)+'» добавлена');render()}
 function pDel(tid,pid){if(confirm('Удалить деталь из состава? Её остаток тоже будет удалён.')){removePart(D,tid,pid);saveCfg();render()}}
-function tAdd(){const n=prompt('Название нового типа антенны (напр. 9-10 ГГц):');if(!n||!n.trim())return;const c=confirm('Скопировать состав деталей из типа «'+D.types[0].name+'»? (ОК — скопировать, Отмена — пустой)');bomTab=addType(D,n.trim(),c?D.types[0].id:null);saveCfg();ok('Тип добавлен');render()}
-function tDel(tid){if(D.types.length<2)return alert('Нужен хотя бы один тип');if(confirm('Удалить тип антенны и все его детали со склада?')){const t=D.types.find(x=>x.id===tid);t.parts.forEach(p=>{delete D.stock[tid+'|'+p.id];delete D.thr[tid+'|'+p.id]});D.types=D.types.filter(x=>x.id!==tid);bomTab='shared';saveCfg();render()}}
+function tAdd(){const n=prompt('Название нового типа антенны (напр. 9-10 ГГц):');if(!n||!n.trim())return;const c=confirm('Скопировать варианты и детали из «'+D.types[0].name+'»?');bomTab=addType(D,n.trim(),c?D.types[0].id:null);saveCfg();ok('Тип добавлен');render()}
+function tDel(tid){if(D.types.length<2)return alert('Нужен хотя бы один тип');if(confirm('Удалить тип антенны и все его остатки?')){const t=D.types.find(x=>x.id===tid);
+ (t.parts||[]).forEach(p=>{delete D.stock[tid+'|'+p.id];delete D.thr[tid+'|'+p.id]});(t.dbis||[]).forEach(dbi=>{delete D.stock[tid+'|'+dbi+'|horn'];delete D.thr[tid+'|'+dbi+'|horn'];(t.conns||[]).forEach(c=>{delete D.stock[tid+'|'+dbi+'|'+c+'|cup'];delete D.thr[tid+'|'+dbi+'|'+c+'|cup']})});
+ D.types=D.types.filter(x=>x.id!==tid);bomTab='shared';saveCfg();render()}}
 function backup(){return`<div class="card"><h2>Резервная копия</h2><button class="btn-w" onclick="exp()">⬇ Экспорт JSON</button><label class="small">Импорт JSON:</label><input type="file" accept=".json" onchange="imp(this.files[0])"></div>`}
-function exp(){const b=new Blob([JSON.stringify(D,null,1)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sprut-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click()}
+function exp(){const b=new Blob([JSON.stringify({...D,users:undefined},null,1)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sprut-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click()}
 function imp(f){if(!f)return;f.text().then(async t=>{const n=JSON.parse(t);if(!n.stock)throw 0;if(confirm('Заменить облачные данные этой копией?')){await FB.importLocal(migrate(n));ok('Импортировано');render()}}).catch(()=>{bad('Неверный файл');render()})}
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
 </script>
