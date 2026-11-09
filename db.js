@@ -46,7 +46,7 @@ async function txStock(fn){const ts=new Date().toISOString();return F.runTransac
  tx.update(R.stock,{stock:d.stock,next:d._next!=null?d._next:(d.orders.length?d.orders[0].id+1:(s.next||1))});
  d.log.forEach(l=>tx.set(F.doc(F.collection(db,'log')),{...l,uid:ME.uid}));d.orders.forEach(o=>tx.set(F.doc(F.collection(db,'orders')),{...o,uid:ME.uid}));return r})}
 const withTimeout=(p,ms=15000)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j({code:'unavailable'}),ms))]);
-const cfgData=()=>({types:D.types,shared:D.shared,thr:D.thr,schema:D.schema||2,vbom:D.vbom||{horn:{name:'Деталь для рупора',unit:'шт',qty:2},cup:{name:'Стакан',unit:'шт',qty:1}}});
+const cfgData=()=>({types:D.types,shared:D.shared,thr:D.thr,schema:D.schema||3,vbom:D.vbom||{horn:{name:'Деталь для рупора',unit:'шт',qty:2},cup:{name:'Стакан',unit:'шт',qty:1}}});
 W.FB={err,email,
  async login(l,p){await signInWithEmailAndPassword(auth,email(l),p)},
  logout(){unsub();return signOut(auth)},
@@ -87,7 +87,7 @@ W.FB={err,email,
   const d={types:JSON.parse(JSON.stringify(cfg.types||[])),shared:JSON.parse(JSON.stringify(cfg.shared||[])),thr:JSON.parse(JSON.stringify(cfg.thr||{})),vbom:cfg.vbom?JSON.parse(JSON.stringify(cfg.vbom)):null,schema:cfg.schema||0,stock:JSON.parse(JSON.stringify(st.stock||{})),orders:[],log:[],users:[]};
   // also run legacy bom→types if needed
   migrate(d);
-  const {notes}=migrateV2(d);
+  const {notes}=runMigrations(d);
   const batch=F.writeBatch(db);
   batch.set(R.cfg,{types:d.types,shared:d.shared,thr:d.thr,schema:d.schema,vbom:d.vbom});
   batch.update(R.stock,{stock:d.stock,next:st.next||1});
@@ -105,8 +105,8 @@ W.FB={err,email,
   }catch(e){notes.push('Схема склада обновлена. Пометка старых заказов отложена — опубликуйте новые firestore.rules (orders update), затем нажмите обновление ещё раз.')}
   D.types=d.types;D.shared=d.shared;D.thr=d.thr;D.schema=d.schema;D.vbom=d.vbom;D.stock=d.stock;D._migNotes=notes;
   return notes},
- async importLocal(o){migrate(o);if(needsMig(o))migrateV2(o);
-  const ops=[[R.cfg,{types:o.types,shared:o.shared,thr:o.thr,schema:o.schema||2,vbom:o.vbom}],[R.stock,{stock:o.stock,next:(o.orders.reduce((m,x)=>Math.max(m,x.id||0),0))+1}],
+ async importLocal(o){migrate(o);if(needsMig(o))runMigrations(o);
+  const ops=[[R.cfg,{types:o.types,shared:o.shared,thr:o.thr,schema:o.schema||3,vbom:o.vbom}],[R.stock,{stock:o.stock,next:(o.orders.reduce((m,x)=>Math.max(m,x.id||0),0))+1}],
   ...o.orders.map(x=>[F.doc(db,'orders',String(x.id).padStart(6,'0')),{status:'done',doneAt:x.ts,...x,uid:ME.uid}]),...o.log.map(x=>[F.doc(F.collection(db,'log')),{...x,name:x.name||partName(o,x.key),uid:ME.uid}])];
   for(let i=0;i<ops.length;i+=400){const b=F.writeBatch(db);ops.slice(i,i+400).forEach(([r,v])=>b.set(r,JSON.parse(JSON.stringify(v))));await b.commit()}}
 };
