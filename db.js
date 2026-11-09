@@ -24,9 +24,9 @@ const ERR={'auth/invalid-credential':'Неверный логин или пар�
 const err=e=>ERR[e.code]||e.message||String(e);
 async function checkBoot(){try{BOOT=(await F.getDoc(R.pub)).exists()}catch(e){BOOT=true}}
 const docs=s=>s.docs.map(d=>({...d.data(),_id:d.id}));
-function startSync(){D={types:[],shared:[],thr:{},stock:{},orders:[],log:[],users:[],clients:[],schema:0,vbom:null};let got={cfg:0,stock:0};
+function startSync(){D={types:[],shared:[],thr:{},stock:{},orders:[],log:[],users:[],clients:[],schema:0,vbom:null,inventoryApplied:null};let got={cfg:0,stock:0};
  const done=()=>{if(got.cfg&&got.stock){if(!D.types.length){const s=seed();D.types=s.types;D.shared=s.shared;D.thr=s.thr;D.schema=s.schema;D.vbom=s.vbom}remote()}};
- subs.push(F.onSnapshot(R.cfg,s=>{const c=s.data()||{};D.types=c.types||[];D.shared=c.shared||[];D.thr=c.thr||{};D.schema=c.schema||0;D.vbom=c.vbom||null;got.cfg=1;done()},e=>fail(e)));
+ subs.push(F.onSnapshot(R.cfg,s=>{const c=s.data()||{};D.types=c.types||[];D.shared=c.shared||[];D.thr=c.thr||{};D.schema=c.schema||0;D.vbom=c.vbom||null;D.inventoryApplied=c.inventoryApplied||null;got.cfg=1;done()},e=>fail(e)));
  subs.push(F.onSnapshot(R.stock,s=>{D.stock=(s.data()||{}).stock||{};got.stock=1;done()},e=>fail(e)));
  subs.push(F.onSnapshot(F.collection(db,'users'),s=>{D.users=docs(s).map(u=>({...u,uid:u._id}));const m=D.users.find(u=>u.uid===ME.uid);
    if(!m||m.active===false){bad('Доступ отключён администратором');FB.logout();return}ME=m;done()},e=>fail(e)));
@@ -46,7 +46,7 @@ async function txStock(fn){const ts=new Date().toISOString();return F.runTransac
  tx.update(R.stock,{stock:d.stock,next:d._next!=null?d._next:(d.orders.length?d.orders[0].id+1:(s.next||1))});
  d.log.forEach(l=>tx.set(F.doc(F.collection(db,'log')),{...l,uid:ME.uid}));d.orders.forEach(o=>tx.set(F.doc(F.collection(db,'orders')),{...o,uid:ME.uid}));return r})}
 const withTimeout=(p,ms=15000)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j({code:'unavailable'}),ms))]);
-const cfgData=()=>({types:D.types,shared:D.shared,thr:D.thr,schema:D.schema||3,vbom:D.vbom||{horn:{name:'Деталь для рупора',unit:'шт',qty:2},cup:{name:'Стакан',unit:'шт',qty:1}}});
+const cfgData=()=>({types:D.types,shared:D.shared,thr:D.thr,schema:D.schema||3,vbom:D.vbom||{horn:{name:'Деталь для рупора',unit:'шт',qty:2},cup:{name:'Стакан',unit:'шт',qty:1}},inventoryApplied:D.inventoryApplied||null});
 W.FB={err,email,
  async login(l,p){await signInWithEmailAndPassword(auth,email(l),p)},
  logout(){unsub();return signOut(auth)},
@@ -56,6 +56,15 @@ W.FB={err,email,
   ME={login:l.trim(),name:l.trim(),admin:true,active:true,uid:c.user.uid};U=ME.login;STATUS='ready';unsub();startSync()}finally{BOOTING=false}},
  order(lines,meta){return withTimeout(txStock((d,s)=>{d.orders=[{id:(s.next||1)-1}];const r=placeOrder(d,lines,U,meta);d.orders=d.orders.filter(o=>o.lines);d._next=(r.id||r)+1;return r}))},
  adjust(k,v,m,note){return withTimeout(txStock(d=>adjust(d,k,v,m,U,note)))},
+ async applyInventory(map){if(!me().admin)throw Error('Только администратор');
+  return withTimeout(F.runTransaction(db,async tx=>{const s=(await tx.get(R.stock)).data()||{stock:{},next:1};
+   const stock={...s.stock};const ts=new Date().toISOString();const logs=[];let changed=0;
+   Object.entries(map).forEach(([k,v])=>{const nv=+v;if(isNaN(nv)||nv<0)return;const old=stock[k]||0;if(old===nv)return;
+    stock[k]=nv;changed++;logs.push({ts,user:U,uid:ME.uid,key:k,name:partName(D,k),delta:nv-old,kind:'Корректировка: Инвентарь 09.11.2026'})});
+   tx.update(R.stock,{stock,next:s.next||1});
+   logs.forEach(l=>tx.set(F.doc(F.collection(db,'log')),l));
+   tx.update(R.cfg,{inventoryApplied:'2026-11-09'});
+   return{changed,total:Object.keys(map).length}}))},
  saveConfig(){return F.setDoc(R.cfg,cfgData())},
  async createUser(l,p,admin){const a2=initializeApp(firebaseConfig,'sec'+Date.now()),au2=getAuth(a2);
   if(EMU){const A=await import(G+'firebase-auth.js');A.connectAuthEmulator(au2,'http://127.0.0.1:9099',{disableWarnings:true})}

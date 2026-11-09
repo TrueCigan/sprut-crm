@@ -147,6 +147,14 @@ function hash(s){let h=5381;for(const c of s)h=(h*33^c.charCodeAt(0))>>>0;return
 function auth(d,login,pw){const u=d.users.find(x=>x.login.trim().toLowerCase()===login.trim().toLowerCase());if(!u||u.pw!==hash(pw))return{err:'Неверный логин или пароль'};if(u.disabled)return{err:'Доступ отключён администратором'};return{u}}
 /*ENDCORE*/
 
+const INV_STOCK_20261109={
+ '5-6|1|cup':0,'5-6|2|cup':111,'6-7|1|cup':85,'6-7|2|cup':4,'7-8|1|cup':0,'7-8|2|cup':238,'8-9|1|cup':0,'8-9|2|cup':3,
+ '5-6|14|horn':7,'5-6|16|horn':103,'5-6|18|horn':11,'5-6|21|horn':1,
+ '6-7|14|horn':0,'6-7|16|horn':0,'6-7|18|horn':123,'6-7|21|horn':6,
+ '7-8|14|horn':12,'7-8|16|horn':0,'7-8|18|horn':22,'7-8|21|horn':13,
+ '8-9|14|horn':0,'8-9|16|horn':0,'8-9|18|horn':21,'8-9|21|horn':0
+};
+
 let D=null,U=null,ME=null,STATUS='loading',BOOT=false,view='inv',invTab='shared',bomTab='shared',lines=[],flash='',PENDING=false,FT=0;
 let oFilter='',oSort='deadline',oDir=1,hFilter='',hSort='ts',hDir=-1,cliEdit=null,deadMode='days',deadDays=7,orderOpen=null,logOpen=null,buyAlert='';
 const me=()=>(D&&ME&&D.users.find(u=>u.uid===ME.uid))||ME||{};
@@ -176,9 +184,13 @@ function migBanner(){let html='';
  if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада → схема 3</b><br>Стаканы объединяются по ГГц+разъёмам (без дБи). Заглушка → общие (сумма со втулкой и заглушками по ГГц); втулка удаляется. дБи: 14/16/18/21. Идемпотентно.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему</button></div></div>`;
  else if(!me().admin&&needsMig(D))html+=`<div class="msg w">Администратор должен обновить структуру склада. Новые заказы временно недоступны.</div>`;
  if(D._migNotes&&D._migNotes.length)html+=`<div class="msg" style="background:#24401a"><b>Миграция выполнена</b><ul style="margin:6px 0 0;padding-left:18px">${D._migNotes.map(n=>'<li>'+esc(n)+'</li>').join('')}</ul><button onclick="D._migNotes=null;render()" style="margin-top:8px">Скрыть</button></div>`;
+ if(me().admin&&D.inventoryApplied!=='2026-11-09')html+=`<div class="msg w"><b>Применить инвентарь 09.11.2026</b><br>Запишет остатки стаканов и рупоров для 5–9 ГГц по таблице (общие детали, 3–4/4–5 ГГц и заглушку не трогает). Каждое изменение — в лог как корректировка.<div class="line" style="margin-top:8px"><button class="p" onclick="doInvApply(false)">Применить инвентарь</button></div></div>`;
+ else if(me().admin&&D.inventoryApplied==='2026-11-09')html+=`<div class="msg" style="background:#24401a">Инвентарь 09.11.2026 уже применён. <button onclick="doInvApply(true)" style="margin-left:8px;min-height:36px">Повторить</button></div>`;
  if(me().admin&&!localStorage.getItem('sprut_migrated')){let o;try{o=JSON.parse(localStorage.getItem('sprut_crm_v1'))}catch(e){}
   if(o&&o.stock)html+=`<div class="msg w">Локальные данные прошлой версии (${(o.orders||[]).length} заказов). <div class="line" style="margin-top:8px"><button class="p" onclick="doMig()">Импортировать в облако</button><button onclick="localStorage.setItem('sprut_migrated','skip');render()">Не нужно</button></div></div>`}
  return html}
+async function doInvApply(force){if(force&&!confirm('Перезаписать остатки рупоров/стаканов (5–9 ГГц) по инвентарю 09.11.2026?'))return;
+ try{const r=await FB.applyInventory(INV_STOCK_20261109);D.inventoryApplied='2026-11-09';ok('Инвентарь применён: изменено '+r.changed+' из '+r.total+' позиций')}catch(e){bad(FB.err(e))}render()}
 async function doSchemaMig(){try{const notes=await FB.migrateSchema();ok('Схема обновлена');D._migNotes=notes}catch(e){bad(FB.err(e))}render()}
 async function doMig(){if(!confirm('Заменить облачный склад, состав и историю данными этого устройства? (Пользователей нужно будет добавить заново.)'))return;try{await FB.importLocal(migrate(JSON.parse(localStorage.getItem('sprut_crm_v1'))));localStorage.setItem('sprut_migrated','1');ok('Импортировано')}catch(e){bad(FB.err(e))}render()}
 function go(v){view=v;render();scrollTo(0,0)}
