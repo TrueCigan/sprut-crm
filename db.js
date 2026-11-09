@@ -54,7 +54,7 @@ W.FB={err,email,
   const s=seed(),b=F.writeBatch(db);b.set(F.doc(db,'users',c.user.uid),{login:l.trim(),name:l.trim(),admin:true,active:true,created:new Date().toISOString()});
   b.set(R.pub,{bootstrapped:true});b.set(R.cfg,{types:s.types,shared:s.shared,thr:s.thr,schema:s.schema,vbom:s.vbom});b.set(R.stock,{stock:s.stock,next:1});await b.commit();
   ME={login:l.trim(),name:l.trim(),admin:true,active:true,uid:c.user.uid};U=ME.login;STATUS='ready';unsub();startSync()}finally{BOOTING=false}},
- order(lines,meta){return withTimeout(txStock((d,s)=>{d.orders=[{id:(s.next||1)-1}];const id=placeOrder(d,lines,U,meta);d.orders=d.orders.filter(o=>o.lines);d._next=id+1;return id}))},
+ order(lines,meta){return withTimeout(txStock((d,s)=>{d.orders=[{id:(s.next||1)-1}];const r=placeOrder(d,lines,U,meta);d.orders=d.orders.filter(o=>o.lines);d._next=(r.id||r)+1;return r}))},
  adjust(k,v,m,note){return withTimeout(txStock(d=>adjust(d,k,v,m,U,note)))},
  saveConfig(){return F.setDoc(R.cfg,cfgData())},
  async createUser(l,p,admin){const a2=initializeApp(firebaseConfig,'sec'+Date.now()),au2=getAuth(a2);
@@ -76,8 +76,9 @@ W.FB={err,email,
   if(!o)throw Error('Заказ не найден');if(o.status&&o.status!=='active')throw Error('Заказ уже не в работе');
   const s=(await tx.get(R.stock)).data()||{stock:{},next:1};
   const d={types:D.types,shared:D.shared,thr:D.thr,vbom:D.vbom,schema:D.schema,stock:{...s.stock},orders:[],log:[]};
-  const req=requirements(d,o.lines||[]);const ts=new Date().toISOString();
-  req.forEach(x=>{d.stock[x.key]=(d.stock[x.key]||0)+x.need;d.log.push({ts,user:U,key:x.key,name:partName(d,x.key),delta:x.need,kind:'Отмена #'+o.id})});
+  const ts=new Date().toISOString();
+  const parts=o.parts&&o.parts.length?o.parts:requirements(d,o.lines||[]).map(x=>({key:x.key,name:partName(d,x.key),deducted:x.need}));
+  parts.forEach(p=>{const add=+p.deducted||0;if(!(add>0))return;d.stock[p.key]=(d.stock[p.key]||0)+add;d.log.push({ts,user:U,key:p.key,name:p.name||partName(d,p.key),delta:add,kind:'Отмена #'+o.id})});
   tx.update(R.stock,{stock:d.stock,next:s.next||1});
   d.log.forEach(l=>tx.set(F.doc(F.collection(db,'log')),{...l,uid:ME.uid}));
   tx.update(oref,{status:'cancelled',cancelledAt:ts,cancelledBy:U})}))},

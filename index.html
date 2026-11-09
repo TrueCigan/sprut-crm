@@ -118,12 +118,16 @@ function requirements(d,lines){const r={};const vb=d.vbom||{horn:{qty:2},cup:{qt
   (t.parts||[]).forEach(p=>{const k=typeId+'|'+p.id;r[k]=(r[k]||0)+(+p.qty||0)*q});
   (d.shared||[]).forEach(p=>{const sq=sharedQty(p,conn);if(sq>0)r[p.id]=(r[p.id]||0)+sq*q})});
  return Object.keys(r).filter(k=>r[k]>0).map(k=>({key:k,need:r[k],have:d.stock[k]||0,short:Math.max(0,r[k]-(d.stock[k]||0))}))}
-function placeOrder(d,lines,user,meta){meta=meta||{};const req=requirements(d,lines);if(!req.length)throw Error('Пустой заказ');if(req.some(x=>x.short>0))throw Error('Недостаточно комплектующих');
+function placeOrder(d,lines,user,meta){meta=meta||{};const req=requirements(d,lines);if(!req.length)throw Error('Пустой заказ');
  if(!meta.clientId&&!meta.clientName)throw Error('Выберите клиента');if(!meta.deadline)throw Error('Укажите срок');
  const id=(d.orders.length?d.orders[0].id:0)+1,ts=new Date().toISOString();
- req.forEach(x=>{d.stock[x.key]=(d.stock[x.key]||0)-x.need;d.log.unshift({ts,user,key:x.key,name:partName(d,x.key),delta:-x.need,kind:'Заказ #'+id})});
+ const parts=req.map(x=>{const have=d.stock[x.key]||0;const deducted=Math.min(x.need,Math.max(0,have));const short=Math.max(0,x.need-deducted);
+  if(deducted>0){d.stock[x.key]=have-deducted;d.log.unshift({ts,user,key:x.key,name:partName(d,x.key),delta:-deducted,kind:'Заказ #'+id+(short?' (частично)':'')})}
+  return{key:x.key,name:partName(d,x.key),need:x.need,have,deducted,short}});
+ const shortfalls=parts.filter(p=>p.short>0).map(p=>({key:p.key,name:p.name,need:p.need,have:p.have,short:p.short}));
  const flines=lines.filter(l=>+l.qty>0).map(l=>{const{typeId,dbi,conn}=parseVariant(l);return{variant:typeId+'|'+dbi+'|'+conn,type:typeId,dbi,conn,label:variantLabel(typeId,dbi,conn),name:variantLabel(typeId,dbi,conn),qty:+l.qty}});
- d.orders.unshift({id,ts,user,status:'active',clientId:meta.clientId||'',clientName:meta.clientName||'',deadline:meta.deadline,note:meta.note||'',lines:flines});return id}
+ d.orders.unshift({id,ts,user,status:'active',clientId:meta.clientId||'',clientName:meta.clientName||'',deadline:meta.deadline,note:meta.note||'',lines:flines,parts,shortfalls,hasShortfall:shortfalls.length>0});
+ return{id,parts,shortfalls}}
 function adjust(d,key,val,mode,user,note){const old=d.stock[key]||0,nv=mode==='set'?+val:old+(+val);if(val===''||isNaN(nv)||nv<0)throw Error('Неверное значение');d.stock[key]=nv;
  d.log.unshift({ts:new Date().toISOString(),user,key,name:partName(d,key),delta:nv-old,kind:(mode==='set'?'Корректировка':'Приход')+(note?': '+note:'')})}
 function addPart(d,typeId,name,unit,qty,thr){const p={id:uid(),name,unit:unit||'шт',qty:+qty||0};let k;if(typeId){d.types.find(x=>x.id===typeId).parts.push(p);k=typeId+'|'+p.id}else{d.shared.push(p);k=p.id}d.stock[k]=0;d.thr[k]=+thr||0;return k}
@@ -144,7 +148,7 @@ function auth(d,login,pw){const u=d.users.find(x=>x.login.trim().toLowerCase()==
 /*ENDCORE*/
 
 let D=null,U=null,ME=null,STATUS='loading',BOOT=false,view='inv',invTab='shared',bomTab='shared',lines=[],flash='',PENDING=false,FT=0;
-let oFilter='',oSort='deadline',oDir=1,hFilter='',hSort='ts',hDir=-1,cliEdit=null,deadMode='days',deadDays=7;
+let oFilter='',oSort='deadline',oDir=1,hFilter='',hSort='ts',hDir=-1,cliEdit=null,deadMode='days',deadDays=7,orderOpen=null,buyAlert='';
 const me=()=>(D&&ME&&D.users.find(u=>u.uid===ME.uid))||ME||{};
 const saveCfg=()=>FB.saveConfig().catch(e=>{bad('Ошибка сохранения: '+FB.err(e));render()});
 function remote(){const a=document.activeElement;if(document.querySelector('nav')&&a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)&&a.type!=='file'){PENDING=true;return}render()}
@@ -158,7 +162,7 @@ function render(){const a=$('#app');if(STATUS==='loading'){a.innerHTML='<main><d
 if(STATUS==='noconfig'){a.innerHTML='<main><div class="card msg e" style="margin-top:20vh">Не настроен firebase-config.js</div></main>';return}
 if(!U||!D){a.innerHTML=authView();flash='';return}
 if(!lines.length){const v=listVariants(D)[0];lines=[{variant:v?v.id:'3-4|14|1',qty:1}]}
-a.innerHTML=`<header><b>SPRUT·CRM</b><span class="small">${esc(me().name)}${me().admin?' (админ)':''} <button onclick="logout()" style="min-height:36px">Выйти</button></span></header><main>${migBanner()}${Date.now()-FT<5000?flash:''}${({inv:invView,order:orderView,orders:ordersView,hist:histView,set:setView})[view]()}</main>
+a.innerHTML=`<header><b>SPRUT·CRM</b><span class="small">${esc(me().name)}${me().admin?' (админ)':''} <button onclick="logout()" style="min-height:36px">Выйти</button></span></header><main>${migBanner()}${buyAlert}${Date.now()-FT<5000?flash:''}${({inv:invView,order:orderView,orders:ordersView,hist:histView,set:setView})[view]()}</main>
 <nav>${[['inv','📦 Склад'],['order','➕ Заказ'],['orders','📋 В работе'],['hist','🗂 Архив'],['set','⚙️ Ещё']].map(([v,t])=>`<button class="${view===v?'on':''}" onclick="go('${v}')">${t}</button>`).join('')}</nav>`}
 const AI='autocapitalize="none" autocorrect="off" spellcheck="false"';
 function authView(){const first=!BOOT;return`<main><form class="card" style="margin-top:12vh" onsubmit="${first?'bootstrap':'login'}();return false"><h2 style="color:var(--acc)">SPRUT·CRM</h2>${flash}
@@ -187,7 +191,8 @@ function invView(){const lowN=allKeys(D).filter(k=>cls(k)!=='ok').length,t=D.typ
   const horns=(t.dbis||[]).map(dbi=>{const hk=t.id+'|'+dbi+'|horn';
    return`<details class="vsec" open><summary>${dbi} дБи ${cls(hk)!=='ok'?'⚠️':''}</summary>${rowP(hk,'Деталь для рупора','×'+(D.vbom?.horn?.qty??2)+' на антенну · мин. '+(D.thr[hk]||0))}</details>`}).join('');
   body=`<div class="card"><h2>Антенна ${esc(t.name)}</h2><h3>Стаканы (на весь диапазон)</h3>${cups}<h3>Рупоры по дБи</h3>${horns}${ghzParts?`<h3>Прочее</h3>${ghzParts}`:''}</div>`}
- return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${warnType(t)?' ⚠️':''}</button>`).join('')}</div>${body}
+ const buys=openShortfalls();
+ return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}${buys.length?`<div class="msg e"><b>Докупить по заказам в работе</b><table style="margin-top:6px"><tr><th>Деталь</th><th>Не хватает</th></tr>${buys.map(p=>`<tr><td>${esc(p.name)}</td><td class="zero">${p.short}</td></tr>`).join('')}</table></div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${warnType(t)?' ⚠️':''}</button>`).join('')}</div>${body}
 <div class="card"><h2>Экспорт остатков</h2><div class="line"><button id="exp-xlsx" onclick="doExport('xlsx')">📊 Excel</button><button id="exp-pdf" onclick="doExport('pdf')">📄 PDF</button></div><p class="small">Структура: общие (вкл. заглушку) → ГГц (стаканы 1/2) → рупоры по дБи.</p></div><div id="dlg"></div>`}
 function warnType(t){return allKeys({types:[t],shared:[],vbom:D.vbom}).some(k=>cls(k)!=='ok')}
 function adjDlg(k){$('#dlg').innerHTML=`<div class="card"><h2>${esc(partName(D,k))}</h2><p>Сейчас: <b>${D.stock[k]||0} ${esc(partUnit(D,k))}</b></p><select id="am"><option value="add">Приход (+ к остатку)</option><option value="set">Корректировка (точный остаток)</option></select>
@@ -210,13 +215,17 @@ function defaultDeadline(){const d=new Date();d.setDate(d.getDate()+(deadDays||7
 function updDead(){const f=$('#dfield');if(!f)return;f.innerHTML=deadMode==='days'?`<input id="ddays" type="number" min="1" value="${deadDays}" oninput="deadDays=+this.value||1">`:`<input id="ddate" type="date" value="${defaultDeadline()}">`}
 function resolveDeadline(){if(deadMode==='date'){const v=$('#ddate')&&$('#ddate').value;if(!v)throw Error('Укажите дату срока');return v}
  const n=+(($('#ddays')&&$('#ddays').value)||deadDays||7);if(!(n>0))throw Error('Укажите число дней');const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
-function prevHtml(){const req=requirements(D,lines),sh=req.some(x=>x.short>0);return`<div class="card"><h2>Потребуется (резерв при создании)</h2><table><tr><th>Деталь</th><th>Нужно</th><th>Есть</th></tr>${req.map(x=>`<tr><td>${esc(partName(D,x.key))}</td><td>${x.need}</td><td class="${x.short?'zero':'ok'}">${x.have}${x.short?' (−'+x.short+')':''}</td></tr>`).join('')}</table>
-${sh?'<div class="msg e">⛔ Не хватает комплектующих — заказ нельзя провести.</div>':''}<button id="confirm" class="p btn-w" ${sh||!req.length?'disabled style="opacity:.4"':''} onclick="doOrder()">Подтвердить и списать</button></div>`}
+function prevHtml(){const req=requirements(D,lines),sh=req.some(x=>x.short>0);return`<div class="card"><h2>Потребуется</h2><table><tr><th>Деталь</th><th>Нужно</th><th>Есть</th><th>Спишут</th><th>Докупить</th></tr>${req.map(x=>{const ded=Math.min(x.need,Math.max(0,x.have));return`<tr><td>${esc(partName(D,x.key))}</td><td>${x.need}</td><td class="${x.short?'zero':'ok'}">${x.have}</td><td>${ded}</td><td class="${x.short?'zero':''}">${x.short||'—'}</td></tr>`}).join('')}</table>
+${sh?'<div class="msg w">⚠️ Не хватает комплектующих — заказ можно провести. Недостающее спишется как 0; появится список на докупку.</div>':''}<button id="confirm" class="p btn-w" ${!req.length?'disabled style="opacity:.4"':''} onclick="doOrder()">Подтвердить и списать</button></div>`}
 function updPrev(){const p=$('#prev');if(p)p.innerHTML=prevHtml()}
 async function doOrder(){const btn=$('#confirm');if(btn)btn.disabled=true;
  try{const cid=$('#oclient')&&$('#oclient').value;const cl=(D.clients||[]).find(c=>c._id===cid);if(!cl)throw Error('Сначала добавьте клиента');
-  const deadline=resolveDeadline();const id=await FB.order(lines,{clientId:cl._id,clientName:cl.name,deadline,note:($('#on')&&$('#on').value.trim())||''});
-  lines=[{variant:listVariants(D)[0].id,qty:1}];ok(`Заказ #${id} в работе, комплектующие списаны`);view='orders'}catch(e){bad(FB.err?FB.err(e):e.message||e)}render()}
+  const deadline=resolveDeadline();const r=await FB.order(lines,{clientId:cl._id,clientName:cl.name,deadline,note:($('#on')&&$('#on').value.trim())||''});
+  const id=typeof r==='object'?r.id:r; const sf=(r&&r.shortfalls)||[];
+  lines=[{variant:listVariants(D)[0].id,qty:1}];
+  if(sf.length){buyAlert=`<div class="msg e" id="buyAlert"><b>Заказ #${id}: нужно докупить</b><table style="margin-top:6px"><tr><th>Деталь</th><th>Нужно</th><th>Было</th><th>Не хватает</th></tr>${sf.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.need}</td><td>${p.have}</td><td class="zero">${p.short}</td></tr>`).join('')}</table><button onclick="buyAlert='';render()" style="margin-top:8px">Скрыть</button></div>`;ok(`Заказ #${id} создан (частичное списание)`)}
+  else{buyAlert='';ok(`Заказ #${id} в работе, комплектующие списаны`)}
+  view='orders'}catch(e){bad(FB.err?FB.err(e):e.message||e)}render()}
 function linesSummary(o){return(o.lines||[]).map(l=>l.qty+'× '+(l.label||l.name||l.variant||(l.type+' ГГц'))).join(', ')}
 function dlCell(o){const st=orderStatus(o);if(st!=='active')return fmtD(o.deadline);
  const d=daysLeft(o.deadline);if(d==null)return'—';if(d<0)return`<span class="zero">просрочен ${-d}д</span>`;if(d<=2)return`<span class="low">${d}д</span>`;return d+'д'}
@@ -226,15 +235,24 @@ function sortOrders(list,sort,dir,filter){let a=list.filter(o=>{if(!filter)retur
   else if(sort==='ts')r=String(x.ts||'').localeCompare(String(y.ts||''));
   else if(sort==='client')r=coll.compare(x.clientName||'',y.clientName||'');
   else r=x.id-y.id;return r*dir});return a}
+function openShortfalls(){const map={};(D.orders||[]).filter(o=>orderStatus(o)==='active').forEach(o=>{(o.shortfalls||[]).forEach(p=>{if(!(p.short>0))return;const k=p.key;map[k]=map[k]||{key:k,name:p.name||partName(D,k),short:0};map[k].short+=p.short})});return Object.values(map).sort((a,b)=>coll.compare(a.name,b.name))}
+function partsBlock(o){const parts=o.parts||[];if(!parts.length)return`<p class="small">Нет данных о списании (старый заказ).</p>`;
+ return`<table><tr><th>Деталь</th><th>Нужно</th><th>Списано</th><th>Докупить</th></tr>${parts.map(p=>`<tr><td>${esc(p.name||partName(D,p.key))}</td><td>${p.need??'—'}</td><td>${p.deducted??'—'}</td><td class="${p.short?'zero':''}">${p.short||'—'}</td></tr>`).join('')}</table>${(o.shortfalls||[]).length?`<p class="small zero">Требуется докупка: ${o.shortfalls.map(p=>esc(p.name)+' ×'+p.short).join(', ')}</p>`:''}`}
+function orderRow(o,mode){const open=orderOpen===o._id;const d=daysLeft(o.deadline);const rowCls=mode==='active'?(d!=null&&d<0?'over':d!=null&&d<=2?'near':''):'';
+ const shortMark=o.hasShortfall||(o.shortfalls||[]).length?' <span class="zero" title="Нужна докупка">⚠</span>':'';
+ const head=mode==='active'
+  ?`<tr class="${rowCls}" style="cursor:pointer" onclick="orderOpen=orderOpen==='${o._id}'?null:'${o._id}';render()"><td>${o.id}${shortMark}</td><td>${esc(o.clientName||'—')}<br><span class="small">${esc(o.user||'')}</span></td><td>${esc(linesSummary(o))}</td><td class="small">${fmt(o.ts)}</td><td>${fmtD(o.deadline)}</td><td>${dlCell(o)}</td>
+<td onclick="event.stopPropagation()"><button style="min-height:36px" onclick="doComplete('${o._id}')">✓</button> <button class="d" style="min-height:36px" onclick="doCancel('${o._id}')">✕</button></td></tr>`
+  :`<tr style="cursor:pointer" onclick="orderOpen=orderOpen==='${o._id}'?null:'${o._id}';render()"><td>${o.id}${shortMark}</td><td>${esc(o.clientName||o.note||'—')}</td><td>${esc(linesSummary(o))}</td><td class="small">${fmt(o.ts)}</td><td class="small">${fmtD(o.deadline)}</td><td>${stChip(o)}${o.doneAt?'<br><span class="small">'+fmt(o.doneAt)+'</span>':o.cancelledAt?'<br><span class="small">'+fmt(o.cancelledAt)+'</span>':''}</td><td class="small">${esc(o.user||'')}</td></tr>`;
+ const detail=open?`<tr><td colspan="${mode==='active'?7:7}" style="background:#161b20">${partsBlock(o)}<p class="small">${open?'▲ ':'▼ '}Нажмите строку заказа, чтобы свернуть</p></td></tr>`:'';
+ return head+detail}
 function ordersView(){const list=sortOrders((D.orders||[]).filter(o=>orderStatus(o)==='active'),oSort,oDir,oFilter);
  return`<div class="card"><h2>Заказы в работе</h2>
 <div class="line"><input id="ofilt" placeholder="Поиск по клиенту…" value="${esc(oFilter)}" oninput="oFilter=this.value;render()"><select style="max-width:140px" onchange="oSort=this.value;render()"><option value="deadline" ${oSort==='deadline'?'selected':''}>Срок</option><option value="ts" ${oSort==='ts'?'selected':''}>Создан</option><option value="client" ${oSort==='client'?'selected':''}>Клиент</option></select>
 <button style="flex:0 0 48px" onclick="oDir*=-1;render()">${oDir>0?'↑':'↓'}</button></div>
 <div class="scroll"><table><tr><th>#</th><th>Клиент</th><th>Антенны</th><th>Создан</th><th>Срок</th><th>Ост.</th><th></th></tr>
-${list.map(o=>{const d=daysLeft(o.deadline);const rowCls=d!=null&&d<0?'over':d!=null&&d<=2?'near':'';
- return`<tr class="${rowCls}"><td>${o.id}</td><td>${esc(o.clientName||'—')}<br><span class="small">${esc(o.user||'')}</span></td><td>${esc(linesSummary(o))}</td><td class="small">${fmt(o.ts)}</td><td>${fmtD(o.deadline)}</td><td>${dlCell(o)}</td>
-<td><button style="min-height:36px" onclick="doComplete('${o._id}')">✓</button> <button class="d" style="min-height:36px" onclick="doCancel('${o._id}')">✕</button></td></tr>`}).join('')||'<tr><td colspan="7" class="small">Нет заказов в работе</td></tr>'}</table></div>
-<p class="small">✓ — выполнен (в архив). ✕ — отмена с возвратом комплектующих.</p></div>`}
+${list.map(o=>orderRow(o,'active')).join('')||'<tr><td colspan="7" class="small">Нет заказов в работе</td></tr>'}</table></div>
+<p class="small">Строка заказа — раскрыть списание. ✓ выполнен · ✕ отмена (возврат списанного).</p></div>`}
 async function doComplete(oid){if(!confirm('Отметить заказ выполненным?'))return;try{await FB.completeOrder(oid);ok('Заказ выполнен')}catch(e){bad(FB.err(e))}render()}
 async function doCancel(oid){if(!confirm('Отменить заказ и вернуть комплектующие на склад?'))return;try{await FB.cancelOrder(oid);ok('Заказ отменён, детали возвращены')}catch(e){bad(FB.err(e))}render()}
 function histView(){const list=sortOrders((D.orders||[]).filter(o=>orderStatus(o)!=='active'),hSort,hDir,hFilter);
@@ -243,7 +261,8 @@ function histView(){const list=sortOrders((D.orders||[]).filter(o=>orderStatus(o
 <button style="flex:0 0 48px" onclick="hDir*=-1;render()">${hDir>0?'↑':'↓'}</button></div>
 <div class="line"><button id="exp-ord-xlsx" onclick="doOrdersExport('xlsx')">📊 Excel</button><button id="exp-ord-pdf" onclick="doOrdersExport('pdf')">📄 PDF</button></div>
 <div class="scroll"><table><tr><th>#</th><th>Клиент</th><th>Антенны</th><th>Создан</th><th>Срок</th><th>Статус</th><th>Кто</th></tr>
-${list.map(o=>`<tr><td>${o.id}</td><td>${esc(o.clientName||o.note||'—')}</td><td>${esc(linesSummary(o))}</td><td class="small">${fmt(o.ts)}</td><td class="small">${fmtD(o.deadline)}</td><td>${stChip(o)}${o.doneAt?'<br><span class="small">'+fmt(o.doneAt)+'</span>':o.cancelledAt?'<br><span class="small">'+fmt(o.cancelledAt)+'</span>':''}</td><td class="small">${esc(o.user||'')}</td></tr>`).join('')||'<tr><td colspan="7" class="small">Пусто</td></tr>'}</table></div></div>
+${list.map(o=>orderRow(o,'hist')).join('')||'<tr><td colspan="7" class="small">Пусто</td></tr>'}</table></div>
+<p class="small">Один заказ — одна строка. Нажмите, чтобы увидеть списанные детали.</p></div>
 <div class="card"><h2>Движение склада</h2><table>${(D.log||[]).slice(0,200).map(l=>`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(l.name||partName(D,l.key))}<br><span class="small">${esc(l.kind)}</span></td><td class="${l.delta<0?'low':'ok'}">${l.delta>0?'+':''}${l.delta}</td></tr>`).join('')||'<tr><td class="small">Пусто</td></tr>'}</table></div>`}
 function setView(){return clientsCard()+(me().admin?adminCards():'<div class="card"><p>Настройки BOM доступны администратору.</p></div>')+backup()}
 function clientsCard(){const list=[...(D.clients||[])].sort((a,b)=>coll.compare(a.name,b.name));
