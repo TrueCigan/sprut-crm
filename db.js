@@ -91,12 +91,18 @@ W.FB={err,email,
   const batch=F.writeBatch(db);
   batch.set(R.cfg,{types:d.types,shared:d.shared,thr:d.thr,schema:d.schema,vbom:d.vbom});
   batch.update(R.stock,{stock:d.stock,next:st.next||1});
-  // patch legacy orders missing status (treat as done)
-  const oq=await F.getDocs(F.query(F.collection(db,'orders'),F.limit(500)));
-  let patched=0;
-  oq.docs.forEach(doc=>{const o=doc.data();if(!o.status){batch.update(doc.ref,{status:'done',doneAt:o.ts||new Date().toISOString(),legacy:true});patched++}});
   await batch.commit();
-  if(patched)notes.push('Старые заказы без статуса помечены как «Выполнен»: '+patched);
+  // patch legacy orders (needs firestore.rules with orders update — best-effort until republished)
+  try{
+    const oq=await F.getDocs(F.query(F.collection(db,'orders'),F.limit(500)));
+    const toPatch=oq.docs.filter(doc=>!doc.data().status);
+    for(let i=0;i<toPatch.length;i+=400){
+      const b=F.writeBatch(db);
+      toPatch.slice(i,i+400).forEach(doc=>{const o=doc.data();b.update(doc.ref,{status:'done',doneAt:o.ts||new Date().toISOString(),legacy:true})});
+      await b.commit();
+    }
+    if(toPatch.length)notes.push('Старые заказы без статуса помечены как «Выполнен»: '+toPatch.length);
+  }catch(e){notes.push('Схема склада обновлена. Пометка старых заказов отложена — опубликуйте новые firestore.rules (orders update), затем нажмите обновление ещё раз.')}
   D.types=d.types;D.shared=d.shared;D.thr=d.thr;D.schema=d.schema;D.vbom=d.vbom;D.stock=d.stock;D._migNotes=notes;
   return notes},
  async importLocal(o){migrate(o);if(needsMig(o))migrateV2(o);
