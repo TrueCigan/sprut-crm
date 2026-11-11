@@ -24,10 +24,10 @@ const ERR={'auth/invalid-credential':'Неверный логин или пар�
 const err=e=>ERR[e.code]||e.message||String(e);
 async function checkBoot(){try{BOOT=(await F.getDoc(R.pub)).exists()}catch(e){BOOT=true}}
 const docs=s=>s.docs.map(d=>({...d.data(),_id:d.id}));
-function startSync(){D={types:[],shared:[],thr:{},stock:{},orders:[],log:[],users:[],clients:[],partners:[],welding:[],weldingLog:[],schema:0,vbom:null,inventoryApplied:null,weldingSeeded:false};let got={cfg:0,stock:0};
- const done=()=>{if(got.cfg&&got.stock){if(!D.types.length){const s=seed();D.types=s.types;D.shared=s.shared;D.thr=s.thr;D.schema=s.schema;D.vbom=s.vbom;D.weldingSeeded=!!s.weldingSeeded}remote()}};
+function startSync(){D={types:[],shared:[],thr:{},stock:{},expected:{},orders:[],log:[],users:[],clients:[],partners:[],welding:[],weldingLog:[],schema:0,vbom:null,inventoryApplied:null,weldingSeeded:false};let got={cfg:0,stock:0};
+ const done=()=>{if(got.cfg&&got.stock){if(!D.types.length){const s=seed();D.types=s.types;D.shared=s.shared;D.thr=s.thr;D.schema=s.schema;D.vbom=s.vbom;D.weldingSeeded=!!s.weldingSeeded;D.expected=s.expected||D.expected||{}}remote()}};
  subs.push(F.onSnapshot(R.cfg,s=>{const c=s.data()||{};D.types=c.types||[];D.shared=c.shared||[];D.thr=c.thr||{};D.schema=c.schema||0;D.vbom=c.vbom||null;D.inventoryApplied=c.inventoryApplied||null;D.weldingSeeded=!!c.weldingSeeded;got.cfg=1;done()},e=>fail(e)));
- subs.push(F.onSnapshot(R.stock,s=>{D.stock=(s.data()||{}).stock||{};got.stock=1;done()},e=>fail(e)));
+ subs.push(F.onSnapshot(R.stock,s=>{const x=s.data()||{};D.stock=x.stock||{};D.expected=x.expected||{};got.stock=1;done()},e=>fail(e)));
  subs.push(F.onSnapshot(F.collection(db,'users'),s=>{D.users=docs(s).map(u=>({...u,uid:u._id}));const m=D.users.find(u=>u.uid===ME.uid);
    if(!m||m.active===false){bad('Доступ отключён администратором');FB.logout();return}ME=m;done()},e=>fail(e)));
  subs.push(F.onSnapshot(F.query(F.collection(db,'orders'),F.orderBy('id','desc'),F.limit(500)),s=>{D.orders=docs(s);done()},e=>fail(e)));
@@ -45,11 +45,11 @@ onAuthStateChanged(auth,async u=>{if(BOOTING)return;unsub();if(!u){U=ME=D=null;a
   ME={...d,uid:u.uid};U=d.login;STATUS='ready';D=null;render();startSync()}catch(e){bad(err(e));await signOut(auth)}});
 // run a stock-changing operation atomically: read fresh stock, apply core function, write stock + log (+ order)
 async function txStock(fn){const ts=new Date().toISOString();return F.runTransaction(db,async tx=>{const s=(await tx.get(R.stock)).data()||{stock:{},next:1};
- const d={types:D.types,shared:D.shared,thr:D.thr,vbom:D.vbom,schema:D.schema,stock:{...s.stock},orders:[],log:[]};const r=fn(d,s,tx);
- tx.update(R.stock,{stock:d.stock,next:d._next!=null?d._next:(d.orders.length?d.orders[0].id+1:(s.next||1))});
+ const d={types:D.types,shared:D.shared,thr:D.thr,vbom:D.vbom,schema:D.schema,stock:{...s.stock},expected:{...(s.expected||{})},orders:[],log:[]};const r=fn(d,s,tx);
+ tx.update(R.stock,{stock:d.stock,expected:d.expected,next:d._next!=null?d._next:(d.orders.length?d.orders[0].id+1:(s.next||1))});
  d.log.forEach(l=>tx.set(F.doc(F.collection(db,'log')),{...l,uid:ME.uid}));d.orders.forEach(o=>tx.set(F.doc(F.collection(db,'orders')),{...o,uid:ME.uid}));return r})}
 const withTimeout=(p,ms=15000)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j({code:'unavailable'}),ms))]);
-const cfgData=()=>({types:D.types,shared:D.shared,thr:D.thr,schema:D.schema||5,vbom:D.vbom||{horn:{name:'Рупор',unit:'шт',qty:1},cup:{name:'Стакан',unit:'шт',qty:1},blank:{name:'Заготовка рупора',unit:'шт',qty:2}},inventoryApplied:D.inventoryApplied||null,weldingSeeded:!!D.weldingSeeded});
+const cfgData=()=>({types:D.types,shared:D.shared,thr:D.thr,schema:D.schema||6,vbom:D.vbom||{horn:{name:'Рупор',unit:'шт',qty:1},cup:{name:'Стакан',unit:'шт',qty:1},blank:{name:'Заготовка рупора',unit:'шт',qty:2}},inventoryApplied:D.inventoryApplied||null,weldingSeeded:!!D.weldingSeeded});
 async function seedWelding(batch,force){
   const notes=[];
   for(const p of WELD_SEED_PARTNERS){
@@ -70,12 +70,41 @@ async function seedWelding(batch,force){
   }
   return notes;
 }
+async function migrateWeldingDocs(batch){
+  const notes=[];
+  const snap=await F.getDocs(F.collection(db,'welding'));
+  const docs=snap.docs.map(doc=>({ref:doc.ref,id:doc.id,data:doc.data()||{}}));
+  const byNew={};const dels=[];
+  for(const doc of docs){
+    const w=doc.data;const parsed=parseWeldCode(w.code||'',{types:(D&&D.types)||[]});
+    if(!parsed){notes.push('Пропущен документ сварки '+doc.id);continue}
+    const newCode=parsed.code,newId=weldDocId(w.partnerId,newCode);
+    const legacy=doc.id!==newId||(w.code&&w.code!==newCode);
+    if(!legacy)continue;
+    if(!byNew[newId]){
+      const existing=docs.find(x=>x.id===newId);
+      const base=existing?existing.data:{};
+      byNew[newId]={partnerId:w.partnerId,code:newCode,typeId:parsed.typeId,dbi:parsed.dbi,received:+base.received||0,returned:+base.returned||0,updated:new Date().toISOString()};
+    }
+    byNew[newId].received+=(+w.received||0);
+    byNew[newId].returned+=(+w.returned||0);
+    dels.push(doc.ref);
+  }
+  Object.entries(byNew).forEach(([id,rec])=>{
+    batch.set(F.doc(db,'welding',id),rec,{merge:true});
+    notes.push((rec.partnerId||'')+': '+rec.code+' → получено '+rec.received+' / вернули '+rec.returned+' (на сварке '+Math.max(0,rec.received-rec.returned)+')');
+  });
+  dels.forEach(ref=>batch.delete(ref));
+  if(dels.length)notes.push('Старые записи сварки (код с разъёмами) объединены по ГГц+дБи: '+dels.length+' шт.');
+  else notes.push('Записи сварки уже в формате ГГц+дБи (идемпотентно).');
+  return notes;
+}
 W.FB={err,email,
  async login(l,p){await signInWithEmailAndPassword(auth,email(l),p)},
  logout(){unsub();return signOut(auth)},
  async bootstrap(l,p){await checkBoot();if(BOOT)throw Error('Администратор уже создан — войдите');BOOTING=true;try{const c=await createUserWithEmailAndPassword(auth,email(l),p);
   const s=seed(),b=F.writeBatch(db);b.set(F.doc(db,'users',c.user.uid),{login:l.trim(),name:l.trim(),admin:true,active:true,created:new Date().toISOString()});
-  b.set(R.pub,{bootstrapped:true});b.set(R.cfg,{types:s.types,shared:s.shared,thr:s.thr,schema:s.schema,vbom:s.vbom,weldingSeeded:true});b.set(R.stock,{stock:s.stock,next:1});
+  b.set(R.pub,{bootstrapped:true});b.set(R.cfg,{types:s.types,shared:s.shared,thr:s.thr,schema:s.schema,vbom:s.vbom,weldingSeeded:true});b.set(R.stock,{stock:s.stock,expected:s.expected||{},next:1});
   WELD_SEED_PARTNERS.forEach(p=>b.set(F.doc(db,'partners',p.id),{name:p.name,active:true,created:new Date().toISOString(),seed:true}));
   WELD_SEED_ROWS.forEach(row=>{const parsed=parseWeldCode(row.code);b.set(F.doc(db,'welding',weldDocId(row.partnerId,row.code)),{partnerId:row.partnerId,code:row.code,typeId:parsed.typeId,dbi:parsed.dbi,conn:parsed.conn,received:row.received,returned:row.returned,seed:true,updated:new Date().toISOString()})});
   await b.commit();
@@ -112,37 +141,58 @@ W.FB={err,email,
   const ref=await F.addDoc(F.collection(db,'partners'),data);return ref.id},
  delPartner(id){return F.deleteDoc(F.doc(db,'partners',id))},
  async weldSend(partnerId,code,qty){const n=+qty;if(!(n>0))throw Error('Укажите количество');
-  const parsed=parseWeldCode(code);if(!parsed)throw Error('Неверный код варианта');
+  const parsed=parseWeldCode(code);if(!parsed)throw Error('Неверный тип рупора');
+  const codeN=parsed.code;
   const partner=(D.partners||[]).find(p=>p._id===partnerId);if(!partner||partner.active===false)throw Error('Выберите партнёра');
   return withTimeout(F.runTransaction(db,async tx=>{
-   const s=(await tx.get(R.stock)).data()||{stock:{},next:1};
-   const wref=F.doc(db,'welding',weldDocId(partnerId,code));
+   const s=(await tx.get(R.stock)).data()||{stock:{},expected:{},next:1};
+   const wref=F.doc(db,'welding',weldDocId(partnerId,codeN));
    const wsnap=await tx.get(wref);
-   const rec=wsnap.exists()?{...wsnap.data()}:{partnerId,code,typeId:parsed.typeId,dbi:parsed.dbi,conn:parsed.conn,received:0,returned:0};
-   rec.partnerId=partnerId;rec.code=code;rec.typeId=parsed.typeId;rec.dbi=parsed.dbi;rec.conn=parsed.conn;
-   const d={types:D.types,shared:D.shared,thr:D.thr,vbom:D.vbom,schema:D.schema,stock:{...s.stock},orders:[],log:[]};
+   const rec=wsnap.exists()?{...wsnap.data()}:{partnerId,code:codeN,typeId:parsed.typeId,dbi:parsed.dbi,received:0,returned:0};
+   rec.partnerId=partnerId;rec.code=codeN;rec.typeId=parsed.typeId;rec.dbi=parsed.dbi;if('conn' in rec)delete rec.conn;
+   const d={types:D.types,shared:D.shared,thr:D.thr,vbom:D.vbom,schema:D.schema,stock:{...s.stock},expected:{...(s.expected||{})},orders:[],log:[]};
    const r=weldSendCore(d,rec,n,U,partner.name);
-   tx.update(R.stock,{stock:d.stock,next:s.next||1});
+   tx.update(R.stock,{stock:d.stock,expected:d.expected,next:s.next||1});
    tx.set(wref,{...rec,updated:new Date().toISOString()},{merge:true});
    d.log.forEach(l=>tx.set(F.doc(F.collection(db,'log')),{...l,uid:ME.uid}));
-   tx.set(F.doc(F.collection(db,'weldingLog')),{ts:new Date().toISOString(),user:U,uid:ME.uid,kind:'Отправить',partnerId,partnerName:partner.name,code,qty:n,deducted:r.deducted,short:r.short});
+   tx.set(F.doc(F.collection(db,'weldingLog')),{ts:new Date().toISOString(),user:U,uid:ME.uid,kind:'Отправить',partnerId,partnerName:partner.name,code:codeN,qty:n,deducted:r.deducted,short:r.short});
    return{n,deducted:r.deducted,short:r.short,received:r.received}}))},
  async weldRecv(partnerId,code,qty){const m=+qty;if(!(m>0))throw Error('Укажите количество');
-  const parsed=parseWeldCode(code);if(!parsed)throw Error('Неверный код варианта');
+  const parsed=parseWeldCode(code);if(!parsed)throw Error('Неверный тип рупора');
+  const codeN=parsed.code;
   const partner=(D.partners||[]).find(p=>p._id===partnerId);if(!partner||partner.active===false)throw Error('Выберите партнёра');
   return withTimeout(F.runTransaction(db,async tx=>{
-   const s=(await tx.get(R.stock)).data()||{stock:{},next:1};
-   const wref=F.doc(db,'welding',weldDocId(partnerId,code));
+   const s=(await tx.get(R.stock)).data()||{stock:{},expected:{},next:1};
+   const wref=F.doc(db,'welding',weldDocId(partnerId,codeN));
    const wsnap=await tx.get(wref);
-   if(!wsnap.exists())throw Error('У партнёра нет остатка по этому коду');
+   if(!wsnap.exists())throw Error('У партнёра нет остатка по этому типу');
    const rec={...wsnap.data()};
-   const d={types:D.types,shared:D.shared,thr:D.thr,vbom:D.vbom,schema:D.schema,stock:{...s.stock},orders:[],log:[]};
+   rec.partnerId=partnerId;rec.code=codeN;rec.typeId=parsed.typeId;rec.dbi=parsed.dbi;if('conn' in rec)delete rec.conn;
+   const d={types:D.types,shared:D.shared,thr:D.thr,vbom:D.vbom,schema:D.schema,stock:{...s.stock},expected:{...(s.expected||{})},orders:[],log:[]};
    const r=weldRecvCore(d,rec,m,U,partner.name);
-   tx.update(R.stock,{stock:d.stock,next:s.next||1});
+   tx.update(R.stock,{stock:d.stock,expected:d.expected,next:s.next||1});
    tx.set(wref,{...rec,updated:new Date().toISOString()},{merge:true});
    d.log.forEach(l=>tx.set(F.doc(F.collection(db,'log')),{...l,uid:ME.uid}));
-   tx.set(F.doc(F.collection(db,'weldingLog')),{ts:new Date().toISOString(),user:U,uid:ME.uid,kind:'Принять',partnerId,partnerName:partner.name,code,qty:m,remainder:r.remainder});
+   tx.set(F.doc(F.collection(db,'weldingLog')),{ts:new Date().toISOString(),user:U,uid:ME.uid,kind:'Принять',partnerId,partnerName:partner.name,code:codeN,qty:m,remainder:r.remainder});
    return{m,remainder:r.remainder,returned:r.returned}}))},
+ async expectAdd(typeId,dbi,qty){const n=+qty;if(!(n>0)||n!==Math.floor(n))throw Error('Укажите целое количество');
+  const k=expectKey(typeId,dbi),bk=blankKey(typeId,dbi);
+  return withTimeout(F.runTransaction(db,async tx=>{
+   const s=(await tx.get(R.stock)).data()||{stock:{},expected:{},next:1};
+   const expected={...(s.expected||{})};expected[k]=(+expected[k]||0)+n;
+   tx.update(R.stock,{expected});
+   tx.set(F.doc(F.collection(db,'log')),{ts:new Date().toISOString(),user:U,uid:ME.uid,key:bk,name:partName(D,bk),delta:0,kind:'Ожидается от поставщика +'+n});
+   return{n,expected:expected[k]}}))},
+ async expectRecv(typeId,dbi,qty){const n=+qty;if(!(n>0)||n!==Math.floor(n))throw Error('Укажите целое количество');
+  const k=expectKey(typeId,dbi),bk=blankKey(typeId,dbi);
+  return withTimeout(F.runTransaction(db,async tx=>{
+   const s=(await tx.get(R.stock)).data()||{stock:{},expected:{},next:1};
+   const expected={...(s.expected||{})},stock={...s.stock};const have=+expected[k]||0;
+   if(n>have)throw Error('Нельзя принять больше ожидаемого ('+have+')');
+   expected[k]=have-n;stock[bk]=(stock[bk]||0)+n;
+   tx.update(R.stock,{stock,expected,next:s.next||1});
+   tx.set(F.doc(F.collection(db,'log')),{ts:new Date().toISOString(),user:U,uid:ME.uid,key:bk,name:partName(D,bk),delta:n,kind:'Приход от поставщика (ожидалось)'});
+   return{n,expected:expected[k],stock:stock[bk]}}))},
  async completeOrder(oid){return withTimeout(F.runTransaction(db,async tx=>{const ref=F.doc(db,'orders',oid);const snap=await tx.get(ref);const o=snap.data();
   if(!o)throw Error('Заказ не найден');if(o.status&&o.status!=='active')throw Error('Заказ уже не в работе');
   tx.update(ref,{status:'done',doneAt:new Date().toISOString(),doneBy:U})}))},
@@ -159,16 +209,18 @@ W.FB={err,email,
  async migrateSchema(){if(!me().admin)throw Error('Только администратор');
   const cfgSnap=await F.getDoc(R.cfg);const stSnap=await F.getDoc(R.stock);
   const cfg=cfgSnap.data()||{};const st=stSnap.data()||{stock:{},next:1};
-  const d={types:JSON.parse(JSON.stringify(cfg.types||[])),shared:JSON.parse(JSON.stringify(cfg.shared||[])),thr:JSON.parse(JSON.stringify(cfg.thr||{})),vbom:cfg.vbom?JSON.parse(JSON.stringify(cfg.vbom)):null,schema:cfg.schema||0,stock:JSON.parse(JSON.stringify(st.stock||{})),orders:[],log:[],users:[],weldingSeeded:!!cfg.weldingSeeded};
+  const d={types:JSON.parse(JSON.stringify(cfg.types||[])),shared:JSON.parse(JSON.stringify(cfg.shared||[])),thr:JSON.parse(JSON.stringify(cfg.thr||{})),vbom:cfg.vbom?JSON.parse(JSON.stringify(cfg.vbom)):null,schema:cfg.schema||0,stock:JSON.parse(JSON.stringify(st.stock||{})),expected:JSON.parse(JSON.stringify(st.expected||{})),orders:[],log:[],users:[],weldingSeeded:!!cfg.weldingSeeded};
   migrate(d);
   const {notes}=runMigrations(d);
   const batch=F.writeBatch(db);
+  const mergeNotes=await migrateWeldingDocs(batch);
+  if(mergeNotes.length)notes.push(...mergeNotes);
   const weldNotes=await seedWelding(batch,false);
   if(weldNotes.length)notes.push('Сиды сварки: '+weldNotes.join('; '));
   else if(!cfg.weldingSeeded)notes.push('Партнёры и строки сварки уже на месте (идемпотентно).');
-  notes.push('Сиды Віддав не добавляют рупоры на склад — они уже учтены в остатках.');
+  notes.push('Исторические «вернули» не добавляют рупоры на склад — они уже учтены в остатках.');
   batch.set(R.cfg,{types:d.types,shared:d.shared,thr:d.thr,schema:d.schema,vbom:d.vbom,inventoryApplied:cfg.inventoryApplied||null,weldingSeeded:true});
-  batch.update(R.stock,{stock:d.stock,next:st.next||1});
+  batch.update(R.stock,{stock:d.stock,expected:d.expected||{},next:st.next||1});
   await batch.commit();
   try{
     const oq=await F.getDocs(F.query(F.collection(db,'orders'),F.limit(500)));
@@ -180,10 +232,10 @@ W.FB={err,email,
     }
     if(toPatch.length)notes.push('Старые заказы без статуса помечены как «Выполнен»: '+toPatch.length);
   }catch(e){notes.push('Схема склада обновлена. Пометка старых заказов отложена — опубликуйте firestore.rules, затем нажмите обновление ещё раз.')}
-  D.types=d.types;D.shared=d.shared;D.thr=d.thr;D.schema=d.schema;D.vbom=d.vbom;D.stock=d.stock;D.weldingSeeded=true;D.inventoryApplied=cfg.inventoryApplied||null;D._migNotes=notes;
+  D.types=d.types;D.shared=d.shared;D.thr=d.thr;D.schema=d.schema;D.vbom=d.vbom;D.stock=d.stock;D.expected=d.expected||{};D.weldingSeeded=true;D.inventoryApplied=cfg.inventoryApplied||null;D._migNotes=notes;
   return notes},
  async importLocal(o){migrate(o);if(needsMig(o))runMigrations(o);
-  const ops=[[R.cfg,{types:o.types,shared:o.shared,thr:o.thr,schema:o.schema||5,vbom:o.vbom,weldingSeeded:!!o.weldingSeeded,inventoryApplied:o.inventoryApplied||null}],[R.stock,{stock:o.stock,next:(o.orders.reduce((m,x)=>Math.max(m,x.id||0),0))+1}],
+  const ops=[[R.cfg,{types:o.types,shared:o.shared,thr:o.thr,schema:o.schema||6,vbom:o.vbom,weldingSeeded:!!o.weldingSeeded,inventoryApplied:o.inventoryApplied||null}],[R.stock,{stock:o.stock,expected:o.expected||{},next:(o.orders.reduce((m,x)=>Math.max(m,x.id||0),0))+1}],
   ...o.orders.map(x=>[F.doc(db,'orders',String(x.id).padStart(6,'0')),{status:'done',doneAt:x.ts,...x,uid:ME.uid}]),...o.log.map(x=>[F.doc(F.collection(db,'log')),{...x,name:x.name||partName(o,x.key),uid:ME.uid}])];
   for(let i=0;i<ops.length;i+=400){const b=F.writeBatch(db);ops.slice(i,i+400).forEach(([r,v])=>b.set(r,JSON.parse(JSON.stringify(v))));await b.commit()}}
 };

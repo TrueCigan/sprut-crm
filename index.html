@@ -21,6 +21,8 @@ tr.over td{background:#3a1814}tr.near td{background:#3a2e10}.chip{display:inline
 .chip.a{background:#2a4018;color:var(--acc)}.chip.d{background:#1a3040;color:#7ec8e0}.chip.c{background:#402018;color:#e08070}
 .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}details.vsec{border:1px solid var(--line);border-radius:10px;margin:8px 0;padding:0 10px}details.vsec>summary{padding:12px 0;cursor:pointer;font-weight:700;list-style:none}details.vsec>summary::-webkit-details-marker{display:none}
 table.weld{font-size:12px}table.weld th,table.weld td{padding:6px 3px;white-space:nowrap}table.weld tr.act td{background:#1e2a18}table.weld .tot{font-weight:700;background:#252d34}
+.pipe{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin-top:6px}.pipe .step{background:#252d34;border-radius:8px;padding:6px 8px;flex:1;min-width:80px;text-align:center}.pipe .step b{display:block;font-size:18px;line-height:1.1}.pipe .arr{color:var(--mut);align-self:center;font-size:16px}
+.prow{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}.prow:last-child{margin-bottom:0}
 </style></head><body><div id="app"></div>
 <script>
 /*CORE*/
@@ -29,14 +31,13 @@ const DEFAULT_DBIS=[14,16,18,21],DEFAULT_CONNS=[1,2];
 const WELD_SHEET_GHZ=['5-6','6-7','7-8','8-9'];
 const WELD_SEED_PARTNERS=[{id:'roman',name:'Роман'},{id:'dmytro',name:'Дмитро'}];
 const WELD_SEED_ROWS=[
- {partnerId:'roman',code:'6-7-14-1',received:40,returned:40},
- {partnerId:'roman',code:'6-7-14-2',received:20,returned:20},
- {partnerId:'roman',code:'6-7-18-1',received:20,returned:0},
- {partnerId:'dmytro',code:'6-7-14-2',received:16,returned:0},
- {partnerId:'dmytro',code:'6-7-18-2',received:5,returned:0},
- {partnerId:'dmytro',code:'7-8-14-2',received:4,returned:0},
- {partnerId:'dmytro',code:'7-8-18-2',received:19,returned:13},
- {partnerId:'dmytro',code:'8-9-18-1',received:18,returned:0}
+ {partnerId:'roman',code:'6-7-14',received:60,returned:60},
+ {partnerId:'roman',code:'6-7-18',received:20,returned:0},
+ {partnerId:'dmytro',code:'6-7-14',received:16,returned:0},
+ {partnerId:'dmytro',code:'6-7-18',received:5,returned:0},
+ {partnerId:'dmytro',code:'7-8-14',received:4,returned:0},
+ {partnerId:'dmytro',code:'7-8-18',received:19,returned:13},
+ {partnerId:'dmytro',code:'8-9-18',received:18,returned:0}
 ];
 const coll=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function seed(){const stock={},thr={};const tv={'3-4':[40,20,20],'4-5':[30,15,3],'5-6':[6,10,10],'6-7':[24,12,12],'7-8':[0,4,4],'8-9':[18,9,9]};
@@ -45,13 +46,13 @@ TYPES.forEach(t=>{DEFAULT_DBIS.forEach(dbi=>{stock[t+'|'+dbi+'|horn']=dbi===14?t
  DEFAULT_CONNS.forEach(c=>{stock[t+'|'+c+'|cup']=c===1?tv[t][1]:0;thr[t+'|'+c+'|cup']=5})});
 Object.assign(stock,{m24:250,cma:12,cma12:0,cma15:0,cma20:0,cap:TYPES.reduce((s,t)=>s+tv[t][2],0)+30,primer:3000,paint:800});
 Object.assign(thr,{m24:80,cma:10,cma12:5,cma15:5,cma20:5,cap:10,primer:1000,paint:1000});
-return{schema:5,weldingSeeded:true,types:TYPES.map(t=>({id:t,name:t+' ГГц',dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]})),
+return{schema:6,weldingSeeded:true,expected:{},types:TYPES.map(t=>({id:t,name:t+' ГГц',dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]})),
  shared:[{id:'m24',name:'Винт М24',unit:'шт',qty:8},{id:'cma',name:'CMA разъём',unit:'шт',qty:1},{id:'cma12',name:'CMA разъём 12',unit:'шт',qty:0},{id:'cma15',name:'CMA разъём 15',unit:'шт',qty:0},{id:'cma20',name:'CMA разъём 20',unit:'шт',qty:0},{id:'cap',name:'Заглушка',unit:'шт',qty:1},{id:'primer',name:'Грунт',unit:'мл',qty:50},{id:'paint',name:'Краска',unit:'мл',qty:50}],
  vbom:{horn:{name:'Рупор',unit:'шт',qty:1},cup:{name:'Стакан',unit:'шт',qty:1},blank:{name:'Заготовка рупора',unit:'шт',qty:2}},thr,stock,orders:[],log:[],users:[]}}
 function migrate(d){if(!d.types){const b=d.bom||{};d.types=TYPES.map(t=>({id:t,name:t+' ГГц',parts:[{id:'horn',name:'Рупор',unit:'шт',qty:b.horn??1},{id:'cup',name:'Стакан',unit:'шт',qty:b.cup??1},{id:'cap',name:'Заглушка',unit:'шт',qty:b.cap??1}]}));
  d.shared=[{id:'m24',name:'Винт М24',unit:'шт',qty:b.m24??8},{id:'cma',name:'CMA разъём',unit:'шт',qty:b.cma??1},{id:'primer',name:'Грунт',unit:'мл',qty:b.primer??50},{id:'paint',name:'Краска',unit:'мл',qty:b.paint??50}];delete d.bom}
 d.users=(d.users||[]).map(u=>({login:u.login||u.name,name:u.name||u.login,pw:u.pw,admin:!!u.admin,disabled:!!u.disabled}));d.stock=d.stock||{};d.thr=d.thr||{};d.orders=d.orders||[];d.log=d.log||[];d.shared=d.shared||[];return d}
-function needsMig(d){if(!d||!d.types||!d.types.length)return false;if(!d.schema||d.schema<5)return true;if(!['cma12','cma15','cma20'].every(id=>(d.shared||[]).some(p=>p.id===id)))return true;if(!d.vbom||!d.vbom.horn||d.vbom.horn.qty!==1||!d.vbom.blank)return true;
+function needsMig(d){if(!d||!d.types||!d.types.length)return false;if(!d.schema||d.schema<6)return true;if(!['cma12','cma15','cma20'].every(id=>(d.shared||[]).some(p=>p.id===id)))return true;if(!d.vbom||!d.vbom.horn||d.vbom.horn.qty!==1||!d.vbom.blank)return true;
  if(d.shared.some(p=>p.id==='bush'))return true;if(!d.shared.some(p=>p.id==='cap'))return true;
  if(d.types.some(t=>(t.parts||[]).some(p=>p.id==='cap'||p.id==='horn'||p.id==='cup')))return true;
  if(Object.keys(d.stock||{}).some(k=>{const p=k.split('|');return (p.length===4&&p[3]==='cup')||(p.length===2&&p[1]==='cap')}))return true;
@@ -127,6 +128,17 @@ function migrateV5(d){const notes=[];
  if(added.length)notes.push('Добавлены общие: '+added.join(', ')+' (остаток 0, расход на антенну 0, порог 5). Существующий «CMA разъём» не менялся.');
  else notes.push('CMA разъём 12/15/20 уже на месте (остатки не перезаписывались).');
  d.schema=5;return{notes:[...new Set(notes)]}}
+function migrateV6(d){const notes=[];
+ if(!d.schema||d.schema<5){const r=migrateV5(d);notes.push(...r.notes)}
+ d.expected=d.expected||{};
+ d.types.forEach(t=>{(t.dbis||DEFAULT_DBIS).forEach(dbi=>{
+  const bk=t.id+'|'+dbi+'|blank';if(d.stock[bk]==null)d.stock[bk]=0;if(d.thr[bk]==null)d.thr[bk]=0;
+  const hk=t.id+'|'+dbi+'|horn';if(d.stock[hk]==null)d.stock[hk]=0;if(d.thr[hk]==null)d.thr[hk]=10;
+  const ek=expectKey(t.id,dbi);if(d.expected[ek]==null)d.expected[ek]=0})});
+ notes.push('Схема 6: заказ списывает только готовый рупор ×1; части (заготовки) хранятся отдельно и не списываются заказом.');
+ notes.push('Сварка по типу ГГц+дБи (без разъёмов): отправили N рупоров → −2N частей, на сварке +N; приняли M → со сварки −M, рупоры +M. Неполный возврат оставляется «на сварке».');
+ notes.push('В общих комплектующих — сворачиваемый список всех частей рупора и ожидаемых поставок. Остатки склада не затирались.');
+ d.schema=6;return{notes:[...new Set(notes)]}}
 function runMigrations(d){migrate(d);const notes=[];
  if(!d.schema||d.schema<2){const r=migrateV2(d);notes.push(...r.notes)}
  if(!d.schema||d.schema<3){const r=migrateV3(d);notes.push(...r.notes)}
@@ -134,6 +146,7 @@ function runMigrations(d){migrate(d);const notes=[];
   const r=migrateV4(d);notes.push(...r.notes)}
  if(!d.schema||d.schema<5||!['cma12','cma15','cma20'].every(id=>(d.shared||[]).some(p=>p.id===id))){
   const r=migrateV5(d);notes.push(...r.notes)}
+ if(!d.schema||d.schema<6){const r=migrateV6(d);notes.push(...r.notes)}
  return{notes:[...new Set(notes)]}}
 const uid=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 function sharedQty(p,conn){if(p.id==='cma')return +conn;if(p.id==='cap')return +conn===1?1:0;return +p.qty||0}
@@ -145,27 +158,48 @@ function variantLabel(typeId,dbi,conn){return typeId+' '+dbi+' ('+conn+')'}
 function listVariants(d){const out=[];[...d.types].sort((a,b)=>ghz(a)-ghz(b)||coll.compare(a.name,b.name)).forEach(t=>{(t.dbis||DEFAULT_DBIS).forEach(dbi=>{(t.conns||DEFAULT_CONNS).forEach(conn=>{
  out.push({id:t.id+'|'+dbi+'|'+conn,label:variantLabel(t.id,dbi,conn),typeId:t.id,dbi,conn,group:t.name})})})});return out}
 function ghz(t){const m=String(t.name||t.id).match(/\d+([.,]\d+)?/);return m?parseFloat(m[0].replace(',','.')):1e9}
-function weldCode(typeId,dbi,conn){return typeId+'-'+dbi+'-'+conn}
-function parseWeldCode(code){const parts=String(code||'').split('-');if(parts.length<4)return null;
- const conn=+parts.pop(),dbi=+parts.pop(),typeId=parts.join('-');if(!typeId||!(dbi>0)||!(conn>0))return null;
- return{typeId,dbi,conn,code:weldCode(typeId,dbi,conn)}}
+function weldCode(typeId,dbi){return typeId+'-'+dbi}
+function parseWeldCode(code,d){const s=String(code||'');
+ const types=((d&&d.types)||(typeof D!=='undefined'&&D&&D.types)||[]).map(t=>t.id);
+ const ids=[...new Set([...types,...TYPES])].sort((a,b)=>b.length-a.length);
+ const typeId=ids.find(id=>s===id||s.startsWith(id+'-'));
+ if(typeId){const rest=s.slice(typeId.length+1).split('-').filter(Boolean);const dbi=+rest[0];const conn=rest.length>1?+rest[1]:0;
+  if(dbi>0)return{typeId,dbi,conn:conn||0,code:weldCode(typeId,dbi),legacy:rest.length>1,label:typeId+' '+dbi}}
+ const parts=s.split('-');
+ if(parts.length>=3){const last=+parts[parts.length-1],prev=+parts[parts.length-2];
+  if(last>0&&last<10&&prev>=10){const typeId2=parts.slice(0,-2).join('-');if(typeId2)return{typeId:typeId2,dbi:prev,conn:last,code:weldCode(typeId2,prev),legacy:true,label:typeId2+' '+prev}}
+  const dbi=+parts[parts.length-1],typeId2=parts.slice(0,-1).join('-');
+  if(typeId2&&dbi>0)return{typeId:typeId2,dbi,conn:0,code:weldCode(typeId2,dbi),legacy:false,label:typeId2+' '+dbi}}
+ return null}
 function blankKey(typeId,dbi){return typeId+'|'+dbi+'|blank'}
 function hornKey(typeId,dbi){return typeId+'|'+dbi+'|horn'}
+function expectKey(typeId,dbi){return typeId+'|'+dbi}
+function hornLabel(typeId,dbi){return typeId+' '+dbi}
 function weldDocId(partnerId,code){return partnerId+'__'+code}
 function listWeldCodes(d,ghzFilter){const out=[];const types=[...d.types].sort((a,b)=>ghz(a)-ghz(b)||coll.compare(a.name,b.name));
  types.forEach(t=>{if(ghzFilter&&ghzFilter.length&&!ghzFilter.includes(t.id))return;
-  (t.dbis||DEFAULT_DBIS).forEach(dbi=>{(t.conns||DEFAULT_CONNS).forEach(conn=>{out.push({code:weldCode(t.id,dbi,conn),typeId:t.id,dbi,conn})})})});
+  (t.dbis||DEFAULT_DBIS).slice().sort((a,b)=>a-b).forEach(dbi=>out.push({code:weldCode(t.id,dbi),typeId:t.id,dbi,label:hornLabel(t.id,dbi)}))});
  return out}
 function weldRem(rec){return Math.max(0,(+rec.received||0)-(+rec.returned||0))}
-function weldSendCore(d,rec,n,user,partnerName){n=+n;if(!(n>0)||n!==Math.floor(n))throw Error('Укажите целое количество рупоров (пар)');
+function weldKind(w){if(w&&w.typeId&&w.dbi)return{typeId:w.typeId,dbi:+w.dbi,code:weldCode(w.typeId,w.dbi)};return parseWeldCode(w&&w.code)}
+function weldAtType(d,typeId,dbi){return(d.welding||[]).reduce((s,w)=>{const k=weldKind(w);return(k&&k.typeId===typeId&&+k.dbi===+dbi)?s+weldRem(w):s},0)}
+function weldByPartner(d,typeId,dbi){const map={};(d.welding||[]).forEach(w=>{const k=weldKind(w);if(!k||k.typeId!==typeId||+k.dbi!==+dbi)return;const rem=weldRem(w);if(!rem)return;const id=w.partnerId;map[id]=map[id]||{partnerId:id,name:((d.partners||[]).find(p=>p._id===id)||{}).name||id,rem:0};map[id].rem+=rem});
+ return Object.values(map).sort((a,b)=>coll.compare(a.name,b.name))}
+function hornPipe(d,typeId,dbi){return{typeId,dbi,code:weldCode(typeId,dbi),label:hornLabel(typeId,dbi),blanks:d.stock[blankKey(typeId,dbi)]||0,expected:(d.expected||{})[expectKey(typeId,dbi)]||0,welding:weldAtType(d,typeId,dbi),horns:d.stock[hornKey(typeId,dbi)]||0,partners:weldByPartner(d,typeId,dbi)}}
+function blankItems(d){const raw=[];[...d.types].sort((a,b)=>ghz(a)-ghz(b)||coll.compare(a.name,b.name)).forEach(t=>{(t.dbis||DEFAULT_DBIS).slice().sort((a,b)=>a-b).forEach(dbi=>{
+  raw.push({typeId:t.id,dbi,key:blankKey(t.id,dbi),label:hornLabel(t.id,dbi),stock:d.stock[blankKey(t.id,dbi)]||0,expected:(d.expected||{})[expectKey(t.id,dbi)]||0,t})})});
+ return raw.sort((a,b)=>{const av=(a.stock>0?0:1)-(b.stock>0?0:1);if(av)return av;return ghz(a.t)-ghz(b.t)||a.dbi-b.dbi||coll.compare(a.typeId,b.typeId)})}
+function hornShortHint(d,key){const p=String(key||'').split('|');if(p.length!==3||p[2]!=='horn')return'';
+ const w=weldAtType(d,p[0],+p[1]),m=d.stock[blankKey(p[0],+p[1])]||0;
+ return 'рупоров не хватает — на сварке '+w+', частей на складе '+m}
+function weldSendCore(d,rec,n,user,partnerName){n=+n;if(!(n>0)||n!==Math.floor(n))throw Error('Укажите целое количество рупоров');
  const need=2*n,bk=blankKey(rec.typeId,rec.dbi),have=d.stock[bk]||0;
- const deducted=Math.min(need,Math.max(0,have)),short=Math.max(0,need-deducted);
+ if(have<need)throw Error('Недостаточно частей на складе (нужно '+need+', есть '+have+')');
  const ts=new Date().toISOString(),label=partName(d,bk),who=partnerName||rec.partnerId||'';
- if(deducted>0){d.stock[bk]=have-deducted;d.log.unshift({ts,user,key:bk,name:label,delta:-deducted,kind:'Сварка → '+who+' · '+rec.code+(short?' (частично)':'')})}
- if(short>0)d.log.unshift({ts,user,key:bk,name:label,delta:0,kind:'Сварка недост. заготовок '+short+' · '+who+' · '+rec.code});
- rec.received=(+rec.received||0)+n;return{deducted,short,need,received:rec.received}}
+ d.stock[bk]=have-need;d.log.unshift({ts,user,key:bk,name:label,delta:-need,kind:'Сварка → '+who+' · '+rec.code});
+ rec.received=(+rec.received||0)+n;return{deducted:need,short:0,need,received:rec.received}}
 function weldRecvCore(d,rec,m,user,partnerName){m=+m;if(!(m>0)||m!==Math.floor(m))throw Error('Укажите целое количество');
- const rem=weldRem(rec);if(m>rem)throw Error('Нельзя принять больше остатка у партнёра ('+rem+')');
+ const rem=weldRem(rec);if(m>rem)throw Error('Нельзя принять больше, чем на сварке у партнёра ('+rem+')');
  rec.returned=(+rec.returned||0)+m;const hk=hornKey(rec.typeId,rec.dbi);
  d.stock[hk]=(d.stock[hk]||0)+m;const ts=new Date().toISOString(),who=partnerName||rec.partnerId||'';
  d.log.unshift({ts,user,key:hk,name:partName(d,hk),delta:m,kind:'Сварка ← '+who+' · '+rec.code});
@@ -231,7 +265,7 @@ const INV_STOCK_20261109={
 
 let D=null,U=null,ME=null,STATUS='loading',BOOT=false,view='inv',invTab='shared',bomTab='shared',lines=[],flash='',PENDING=false,FT=0;
 let oFilter='',oSort='deadline',oDir=1,hFilter='',hSort='ts',hDir=-1,cliEdit=null,deadMode='days',deadDays=7,orderOpen=null,logOpen=null,buyAlert='';
-let weldFilter='all',weldGhz='sheet',weldDlg=null,partEdit=null;
+let weldFilter='act',weldGhz='all',weldDlg=null,partEdit=null,blanksOpen=false,expDlg=null;
 const me=()=>(D&&ME&&D.users.find(u=>u.uid===ME.uid))||ME||{};
 const saveCfg=()=>FB.saveConfig().catch(e=>{bad('Ошибка сохранения: '+FB.err(e));render()});
 function remote(){const a=document.activeElement;if(document.querySelector('nav')&&a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)&&a.type!=='file'){PENDING=true;return}render()}
@@ -256,7 +290,7 @@ async function login(){try{await FB.login($('#un').value,$('#pw').value)}catch(e
 async function bootstrap(){const n=$('#un').value.trim(),p=$('#pw').value;if(!n||p.length<6){bad('Логин и пароль (мин. 6 символов)');return render()}try{await FB.bootstrap(n,p)}catch(e){bad(FB.err(e));render()}}
 function logout(){FB.logout()}
 function migBanner(){let html='';
- if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада → схема 5</b><br>${(!D.schema||D.schema<4)?'Также выполнятся предыдущие шаги (рупор ×1, заготовки, сиды сварки). ':''}Добавляются общие комплектующие «CMA разъём 12», «CMA разъём 15», «CMA разъём 20» (остаток 0, расход на антенну 0, порог 5). Существующий «CMA разъём» и его остатки не меняются. Норму на антенну можно править в «Ещё». Идемпотентно.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему и сиды</button></div></div>`;
+ if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада → схема 6</b><br>${(!D.schema||D.schema<5)?'Также выполнятся предыдущие шаги (CMA 12/15/20, рупор ×1, заготовки, сиды сварки). ':''}Заказ списывает только 1 готовый рупор; части рупора хранятся отдельно. Сварка — по типу ГГц+дБи (без разъёмов): N рупоров → −2N частей, на сварке +N; приёмка M → со сварки −M, рупоры +M (неполный возврат остаётся на сварке). Старые остатки у партнёров объединяются по типу, остатки склада не затираются. В «Общих» появится сворачиваемый список всех частей и ожидаемых поставок. Идемпотентно.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему и сиды</button></div></div>`;
  else if(!me().admin&&needsMig(D))html+=`<div class="msg w">Администратор должен обновить структуру склада. Новые заказы временно недоступны.</div>`;
  if(D._migNotes&&D._migNotes.length)html+=`<div class="msg" style="background:#24401a"><b>Миграция выполнена</b><ul style="margin:6px 0 0;padding-left:18px">${D._migNotes.map(n=>'<li>'+esc(n)+'</li>').join('')}</ul><button onclick="D._migNotes=null;render()" style="margin-top:8px">Скрыть</button></div>`;
  if(me().admin&&D.inventoryApplied!=='2026-11-09')html+=`<div class="msg w"><b>Применить инвентарь 09.11.2026</b><br>Запишет остатки стаканов и рупоров для 5–9 ГГц по таблице (общие детали, 3–4/4–5 ГГц и заглушку не трогает). Каждое изменение — в лог как корректировка.<div class="line" style="margin-top:8px"><button class="p" onclick="doInvApply(false)">Применить инвентарь</button></div></div>`;
@@ -272,20 +306,40 @@ function go(v){view=v;render();scrollTo(0,0)}
 function rowP(k,label,extra){return`<div class="row"><span>${esc(label)}${extra?'<br><span class="small">'+extra+'</span>':''}</span><span class="${cls(k)}" style="font-size:20px">${D.stock[k]||0} ${esc(partUnit(D,k))}</span><button onclick="adjDlg('${k}')">±</button></div>`}
 function invView(){const lowN=allKeys(D).filter(k=>cls(k)!=='ok').length,t=D.types.find(x=>x.id===invTab);if(!t&&invTab!=='shared')invTab='shared';
  let body='';
- if(invTab==='shared'){body=`<div class="card"><h2>Общие комплектующие</h2>${D.shared.map(p=>rowP(p.id,p.name,'мин. '+(D.thr[p.id]||0)+' '+p.unit+' · '+sharedQtyHint(p))).join('')||'<p class="small">Нет деталей</p>'}</div>`}
+ if(invTab==='shared'){const items=blankItems(D);const sumS=items.reduce((s,x)=>s+x.stock,0),sumE=items.reduce((s,x)=>s+x.expected,0);
+  const blanks=`<details class="vsec" ${blanksOpen?'open':''} ontoggle="blanksOpen=this.open"><summary>Части рупора (заготовки) · на складе ${sumS} · ожидается ${sumE}</summary>
+<p class="small">Сначала позиции с наличием, затем по порядку 3-4 14, 3-4 16… Две части = один рупор после сварки. «Ожид.» — поставка от фрезеровщика, «Получ.» зачисляет на склад.</p>
+${items.map(it=>`<div class="row"><span><b>${esc(it.label)}</b><br><span class="small">на складе <span class="${it.stock>0?'ok':'zero'}">${it.stock}</span> · ожидается ${it.expected||0}</span></span>
+<span class="line" style="flex:0 0 auto;max-width:210px"><button onclick="blanksOpen=true;adjDlg('${it.key}')">±</button><button onclick="expectDlg('${it.typeId}',${it.dbi},'add')">Ожид.</button><button onclick="expectDlg('${it.typeId}',${it.dbi},'recv')" ${it.expected? '':'disabled style="opacity:.45"'}>Получ.</button></span></div>`).join('')}
+</details>${expDlgHtml()}`;
+  body=`<div class="card"><h2>Общие комплектующие</h2>${D.shared.map(p=>rowP(p.id,p.name,'мин. '+(D.thr[p.id]||0)+' '+p.unit+' · '+sharedQtyHint(p))).join('')||'<p class="small">Нет деталей</p>'}${blanks}</div>`}
  else if(t){const ghzParts=(t.parts||[]).map(p=>rowP(t.id+'|'+p.id,p.name,'мин. '+(D.thr[t.id+'|'+p.id]||0)+' · на 1 ант.: '+p.qty)).join('');
   const cups=(t.conns||[]).map(c=>{const ck=t.id+'|'+c+'|cup';return rowP(ck,'Стакан · '+c+' разъём.','общий на весь '+esc(t.name)+' · мин. '+(D.thr[ck]||0))}).join('');
   const horns=(t.dbis||[]).map(dbi=>{const hk=t.id+'|'+dbi+'|horn';const bk=t.id+'|'+dbi+'|blank';
    const warn=cls(hk)!=='ok'||cls(bk)!=='ok';
-   return`<details class="vsec" open><summary>${dbi} дБи ${warn?'⚠️':''}</summary>${rowP(hk,'Рупор','×'+(D.vbom?.horn?.qty??1)+' на антенну · мин. '+(D.thr[hk]||0))}${rowP(bk,'Заготовка рупора','2 шт = 1 рупор · мин. '+(D.thr[bk]||0))}</details>`}).join('');
+   const exp=(D.expected||{})[expectKey(t.id,dbi)]||0;
+   return`<details class="vsec" open><summary>${dbi} дБи ${warn?'⚠️':''}</summary>${rowP(hk,'Рупор','×'+(D.vbom?.horn?.qty??1)+' на антенну · мин. '+(D.thr[hk]||0))}${rowP(bk,'Заготовка рупора','2 шт = 1 рупор · ожидается '+exp+' · мин. '+(D.thr[bk]||0))}</details>`}).join('');
   body=`<div class="card"><h2>Антенна ${esc(t.name)}</h2><h3>Стаканы (на весь диапазон)</h3>${cups}<h3>Рупоры / заготовки по дБи</h3>${horns}${ghzParts?`<h3>Прочее</h3>${ghzParts}`:''}</div>`}
  const buys=openShortfalls();
- return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}${buys.length?`<div class="msg e"><b>Докупить по заказам в работе</b><table style="margin-top:6px"><tr><th>Деталь</th><th>Не хватает</th></tr>${buys.map(p=>`<tr><td>${esc(p.name)}</td><td class="zero">${p.short}</td></tr>`).join('')}</table></div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${warnType(t)?' ⚠️':''}</button>`).join('')}</div>${body}
-<div class="card"><h2>Экспорт остатков</h2><div class="line"><button id="exp-xlsx" onclick="doExport('xlsx')">📊 Excel</button><button id="exp-pdf" onclick="doExport('pdf')">📄 PDF</button></div><p class="small">Структура: общие → ГГц (стаканы 1/2) → рупоры и заготовки по дБи. Экспорт может включать остатки сварки.</p></div><div id="dlg"></div>`}
+ return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}${buys.length?`<div class="msg e"><b>Докупить по заказам в работе</b><table style="margin-top:6px"><tr><th>Деталь</th><th>Не хватает</th></tr>${buys.map(p=>{const hint=hornShortHint(D,p.key);return`<tr><td>${esc(p.name)}${hint?'<br><span class="small">'+esc(hint)+'</span>':''}</td><td class="zero">${p.short}</td></tr>`}).join('')}</table></div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${warnType(t)?' ⚠️':''}</button>`).join('')}</div>${body}
+<div class="card"><h2>Экспорт остатков</h2><div class="line"><button id="exp-xlsx" onclick="doExport('xlsx')">📊 Excel</button><button id="exp-pdf" onclick="doExport('pdf')">📄 PDF</button></div><p class="small">Структура: общие → части рупора и ожидание → ГГц (стаканы 1/2) → рупоры и заготовки по дБи → конвейер сварки.</p></div><div id="dlg"></div>`}
 function warnType(t){return allKeys({types:[t],shared:[],vbom:D.vbom}).some(k=>cls(k)!=='ok')}
 function adjDlg(k){$('#dlg').innerHTML=`<div class="card"><h2>${esc(partName(D,k))}</h2><p>Сейчас: <b>${D.stock[k]||0} ${esc(partUnit(D,k))}</b></p><select id="am"><option value="add">Приход (+ к остатку)</option><option value="set">Корректировка (точный остаток)</option></select>
 <input id="av" type="number" inputmode="decimal" placeholder="Количество, ${esc(partUnit(D,k))}"><input id="an" placeholder="Комментарий (необяз.)"><div class="line"><button onclick="$('#dlg').innerHTML=''">Отмена</button><button class="p" onclick="doAdj('${k}')">Сохранить</button></div></div>`;$('#dlg').scrollIntoView()}
 async function doAdj(k){try{await FB.adjust(k,$('#av').value,$('#am').value,$('#an').value.trim());ok('Сохранено')}catch(e){bad(FB.err(e))}render()}
+function expectDlg(typeId,dbi,mode){blanksOpen=true;expDlg={typeId,dbi,mode};invTab='shared';view='inv';render();const el=$('#edlg');if(el)el.scrollIntoView()}
+function expDlgHtml(){if(!expDlg)return'';
+ const{typeId,dbi,mode}=expDlg,ek=expectKey(typeId,dbi),bk=blankKey(typeId,dbi);
+ const have=(D.expected||{})[ek]||0,stock=D.stock[bk]||0,title=mode==='add'?'Ожидается от поставщика':'Получили от поставщика';
+ return`<div class="card" id="edlg" style="margin-top:10px"><h2>${title}</h2>
+<p>Тип: <b>${esc(hornLabel(typeId,dbi))}</b><br>На складе: <b>${stock}</b> · ожидается: <b>${have}</b></p>
+<label class="small">Количество частей</label><input id="exqty" type="number" min="1" step="1" value="${mode==='recv'?have||1:1}">
+<p class="small">${mode==='add'?'Прибавится к «ожидается». Когда детали приедут — нажмите «Получ.».':'Спишется из «ожидается» и добавится к частям на складе. Можно принять частично.'}</p>
+<div class="line"><button onclick="expDlg=null;blanksOpen=true;render()">Отмена</button><button class="p" onclick="doExpect()">${mode==='add'?'Записать ожидание':'Зачислить на склад'}</button></div></div>`}
+async function doExpect(){const q=$('#exqty')&&$('#exqty').value;try{
+  if(expDlg.mode==='add'){const r=await FB.expectAdd(expDlg.typeId,expDlg.dbi,q);ok('Ожидается '+r.n+' частей «'+hornLabel(expDlg.typeId,expDlg.dbi)+'» (всего '+r.expected+')')}
+  else{const r=await FB.expectRecv(expDlg.typeId,expDlg.dbi,q);ok('Получено '+r.n+' частей, на складе '+r.stock)}
+  expDlg=null;blanksOpen=true}catch(e){bad(FB.err?FB.err(e):e.message||e)}render()}
 function orderView(){if(needsMig(D))return`<div class="card"><p class="small">Сначала обновите схему склада (баннер выше).</p></div>`;
  const vars=listVariants(D);const clients=[...(D.clients||[])].sort((a,b)=>coll.compare(a.name,b.name));
  lines.forEach(l=>{if(!vars.find(v=>v.id===l.variant))l.variant=vars[0]?vars[0].id:'3-4|14|1'});
@@ -303,15 +357,17 @@ function defaultDeadline(){const d=new Date();d.setDate(d.getDate()+(deadDays||7
 function updDead(){const f=$('#dfield');if(!f)return;f.innerHTML=deadMode==='days'?`<input id="ddays" type="number" min="1" value="${deadDays}" oninput="deadDays=+this.value||1">`:`<input id="ddate" type="date" value="${defaultDeadline()}">`}
 function resolveDeadline(){if(deadMode==='date'){const v=$('#ddate')&&$('#ddate').value;if(!v)throw Error('Укажите дату срока');return v}
  const n=+(($('#ddays')&&$('#ddays').value)||deadDays||7);if(!(n>0))throw Error('Укажите число дней');const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
-function prevHtml(){const req=requirements(D,lines),sh=req.some(x=>x.short>0);return`<div class="card"><h2>Потребуется</h2><table><tr><th>Деталь</th><th>Нужно</th><th>Есть</th><th>Спишут</th><th>Докупить</th></tr>${req.map(x=>{const ded=Math.min(x.need,Math.max(0,x.have));return`<tr><td>${esc(partName(D,x.key))}</td><td>${x.need}</td><td class="${x.short?'zero':'ok'}">${x.have}</td><td>${ded}</td><td class="${x.short?'zero':''}">${x.short||'—'}</td></tr>`}).join('')}</table>
-${sh?'<div class="msg w">⚠️ Не хватает комплектующих — заказ можно провести. Недостающее спишется как 0; появится список на докупку.</div>':''}<button id="confirm" class="p btn-w" ${!req.length?'disabled style="opacity:.4"':''} onclick="doOrder()">Подтвердить и списать</button></div>`}
+function prevHtml(){const req=requirements(D,lines),sh=req.some(x=>x.short>0);
+ const hints=req.filter(x=>x.short>0&&String(x.key).endsWith('|horn')).map(x=>hornShortHint(D,x.key)).filter(Boolean);
+ return`<div class="card"><h2>Потребуется</h2><table><tr><th>Деталь</th><th>Нужно</th><th>Есть</th><th>Спишут</th><th>Докупить</th></tr>${req.map(x=>{const ded=Math.min(x.need,Math.max(0,x.have));const hint=x.short?hornShortHint(D,x.key):'';return`<tr><td>${esc(partName(D,x.key))}${hint?'<br><span class="small">'+esc(hint)+'</span>':''}</td><td>${x.need}</td><td class="${x.short?'zero':'ok'}">${x.have}</td><td>${ded}</td><td class="${x.short?'zero':''}">${x.short||'—'}</td></tr>`}).join('')}</table>
+${sh?'<div class="msg w">⚠️ Не хватает комплектующих — заказ можно провести. Недостающее спишется как 0; появится список на докупку.'+(hints.length?'<br>'+hints.map(esc).join('<br>'):'')+'</div>':''}<button id="confirm" class="p btn-w" ${!req.length?'disabled style="opacity:.4"':''} onclick="doOrder()">Подтвердить и списать</button></div>`}
 function updPrev(){const p=$('#prev');if(p)p.innerHTML=prevHtml()}
 async function doOrder(){const btn=$('#confirm');if(btn)btn.disabled=true;
  try{const cid=$('#oclient')&&$('#oclient').value;const cl=(D.clients||[]).find(c=>c._id===cid);if(!cl)throw Error('Сначала добавьте клиента');
   const deadline=resolveDeadline();const r=await FB.order(lines,{clientId:cl._id,clientName:cl.name,deadline,note:($('#on')&&$('#on').value.trim())||''});
   const id=typeof r==='object'?r.id:r; const sf=(r&&r.shortfalls)||[];
   lines=[{variant:listVariants(D)[0].id,qty:1}];
-  if(sf.length){buyAlert=`<div class="msg e" id="buyAlert"><b>Заказ #${id}: нужно докупить</b><table style="margin-top:6px"><tr><th>Деталь</th><th>Нужно</th><th>Было</th><th>Не хватает</th></tr>${sf.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.need}</td><td>${p.have}</td><td class="zero">${p.short}</td></tr>`).join('')}</table><button onclick="buyAlert='';render()" style="margin-top:8px">Скрыть</button></div>`;ok(`Заказ #${id} создан (частичное списание)`)}
+  if(sf.length){buyAlert=`<div class="msg e" id="buyAlert"><b>Заказ #${id}: нужно докупить</b><table style="margin-top:6px"><tr><th>Деталь</th><th>Нужно</th><th>Было</th><th>Не хватает</th></tr>${sf.map(p=>{const hint=hornShortHint(D,p.key);return`<tr><td>${esc(p.name)}${hint?'<br><span class="small">'+esc(hint)+'</span>':''}</td><td>${p.need}</td><td>${p.have}</td><td class="zero">${p.short}</td></tr>`}).join('')}</table><button onclick="buyAlert='';render()" style="margin-top:8px">Скрыть</button></div>`;ok(`Заказ #${id} создан (частичное списание)`)}
   else{buyAlert='';ok(`Заказ #${id} в работе, комплектующие списаны`)}
   view='orders'}catch(e){bad(FB.err?FB.err(e):e.message||e)}render()}
 function linesSummary(o){return(o.lines||[]).map(l=>l.qty+'× '+(l.label||l.name||l.variant||(l.type+' ГГц'))).join(', ')}
@@ -415,8 +471,8 @@ function tDel(tid){if(D.types.length<2)return alert('Нужен хотя бы о
 
 function activePartners(){return(D.partners||[]).filter(p=>p.active!==false).sort((a,b)=>coll.compare(a.name,b.name))}
 function weldMap(){const m={};(D.welding||[]).forEach(w=>{m[weldDocId(w.partnerId,w.code)]=w});return m}
-function weldRec(partnerId,code,map){const id=weldDocId(partnerId,code);const w=map[id];
- if(w)return w;const p=parseWeldCode(code);return{_id:id,partnerId,code,typeId:p.typeId,dbi:p.dbi,conn:p.conn,received:0,returned:0}}
+function weldRec(partnerId,code,map){const p=parseWeldCode(code);const id=weldDocId(partnerId,p?p.code:code);const w=map[id];
+ if(w)return w;return{_id:id,partnerId,code:p?p.code:code,typeId:p&&p.typeId,dbi:p&&p.dbi,received:0,returned:0}}
 function partnersCard(){const list=[...(D.partners||[])].sort((a,b)=>coll.compare(a.name,b.name));
  const ed=partEdit;return`<div class="card"><h2>Партнёры сварки</h2>
 ${list.map((p,i)=>`<div class="row"><span><b>${esc(p.name)}</b>${p.active===false?' <span class="zero">архив</span>':''}</span>
@@ -431,37 +487,55 @@ function weldView(){if(needsMig(D))return`<div class="card"><p class="small">С�
  const partners=activePartners();const map=weldMap();
  const ghzFilter=weldGhz==='sheet'?WELD_SHEET_GHZ:null;
  let codes=listWeldCodes(D,ghzFilter);
- if(weldFilter==='rem')codes=codes.filter(c=>partners.some(p=>weldRem(weldRec(p._id,c.code,map))>0));
- else if(weldFilter==='act')codes=codes.filter(c=>partners.some(p=>{const r=weldRec(p._id,c.code,map);return(+r.received||0)>0||(+r.returned||0)>0}));
- const totals=partners.map(p=>{let r=0,v=0;codes.forEach(c=>{const rec=weldRec(p._id,c.code,map);r+=(+rec.received||0);v+=(+rec.returned||0)});return{received:r,returned:v,rem:r-v}});
- const head=`<tr><th>Код</th>${partners.map(p=>`<th colspan="3">${esc(p.name)}</th>`).join('')}</tr>
-<tr><th></th>${partners.map(()=>`<th>Отрим.</th><th>Віддав</th><th>Залиш.</th>`).join('')}</tr>`;
- const rows=codes.map(c=>{const act=partners.some(p=>{const r=weldRec(p._id,c.code,map);return(+r.received||0)||(+r.returned||0)});
-  return`<tr class="${act?'act':''}"><td><b>${esc(c.code)}</b></td>${partners.map(p=>{const r=weldRec(p._id,c.code,map);const rem=weldRem(r);
-   return`<td>${r.received||0}</td><td>${r.returned||0}</td><td class="${rem?'low':''}">${rem}</td>`}).join('')}</tr>`}).join('');
- const tot=`<tr class="tot"><td>Разом</td>${totals.map(t=>`<td>${t.received}</td><td>${t.returned}</td><td class="${t.rem?'low':''}">${t.rem}</td>`).join('')}</tr>`;
+ const pipes=codes.map(c=>hornPipe(D,c.typeId,c.dbi));
+ let shown=pipes;
+ if(weldFilter==='rem')shown=pipes.filter(p=>p.welding>0);
+ else if(weldFilter==='parts')shown=pipes.filter(p=>p.blanks>0||p.expected>0);
+ else if(weldFilter==='act')shown=pipes.filter(p=>p.blanks>0||p.expected>0||p.welding>0||p.horns>0);
+ const totals={blanks:shown.reduce((s,p)=>s+p.blanks,0),welding:shown.reduce((s,p)=>s+p.welding,0),horns:shown.reduce((s,p)=>s+p.horns,0),expected:shown.reduce((s,p)=>s+p.expected,0)};
+ const cards=shown.map(p=>{
+  const by=p.partners.length?p.partners.map(x=>esc(x.name)+' '+x.rem).join(', '):'никого';
+  return`<div class="prow"><b>${esc(p.label)}</b>${p.expected?` <span class="small">ожидается ${p.expected} ч.</span>`:''}
+<div class="pipe"><div class="step"><span class="small">части</span><b class="${p.blanks?'ok':'zero'}">${p.blanks}</b></div><div class="arr">→</div>
+<div class="step"><span class="small">на сварке</span><b class="${p.welding?'low':''}">${p.welding}</b><div class="small">${p.welding?by:'—'}</div></div><div class="arr">→</div>
+<div class="step"><span class="small">рупоры</span><b class="${p.horns?'ok':'zero'}">${p.horns}</b></div></div>
+<div class="line" style="margin-top:8px"><button onclick="weldDlg={mode:'send',code:'${p.code||weldCode(p.typeId,p.dbi)}'};render()">Отправить</button><button ${p.welding?'':'disabled style="opacity:.45"'} onclick="weldDlg={mode:'recv',code:'${p.code||weldCode(p.typeId,p.dbi)}'};render()">Принять</button></div></div>`}).join('')||'<p class="small">Нет строк по фильтру.</p>';
  const dlg=weldDlgHtml();
- return`<div class="card"><h2>Сварка</h2>
-<p class="small">Отримав = отправили партнёру (заготовки ×2 на рупор). Віддав = вернул готовые рупоры на склад. Залишок = ещё у партнёра.</p>
+ const pTot=partners.map(pr=>{let rec=0,ret=0;codes.forEach(c=>{const w=weldRec(pr._id,c.code,map);rec+=+w.received||0;ret+=+w.returned||0});return{name:pr.name,received:rec,returned:ret,rem:Math.max(0,rec-ret)}});
+ return`<div class="card"><h2>Сварка — конвейер</h2>
+<p class="small">Части на складе → на сварке у партнёра → готовые рупоры. Отправили N рупоров: −2N частей, на сварке +N. Приняли M: со сварки −M, рупоры +M. Неполный возврат так и остаётся «на сварке».</p>
 <div class="line"><button class="p" onclick="weldDlg={mode:'send'};render()">Отправить</button><button class="p" onclick="weldDlg={mode:'recv'};render()">Принять</button></div>
-<div class="line" style="flex-wrap:wrap"><select style="max-width:160px" onchange="weldFilter=this.value;render()"><option value="all" ${weldFilter==='all'?'selected':''}>Все строки</option><option value="act" ${weldFilter==='act'?'selected':''}>С движением</option><option value="rem" ${weldFilter==='rem'?'selected':''}>С остатком</option></select>
-<select style="max-width:160px" onchange="weldGhz=this.value;render()"><option value="sheet" ${weldGhz==='sheet'?'selected':''}>5–9 ГГц (как таблица)</option><option value="all" ${weldGhz==='all'?'selected':''}>Все ГГц</option></select></div>
-<div class="scroll"><table class="weld">${head}${rows||'<tr><td class="small">Нет строк</td></tr>'}${codes.length?tot:''}</table></div>
-<p class="small">Код: ГГц-дБи-разъёмы, напр. 5-6-14-1. Заготовки списываются при «Отправить»; рупоры приходуются при «Принять».</p></div>
+<div class="line" style="flex-wrap:wrap"><select style="max-width:170px" onchange="weldFilter=this.value;render()"><option value="act" ${weldFilter==='act'?'selected':''}>С наличием / движением</option><option value="rem" ${weldFilter==='rem'?'selected':''}>На сварке</option><option value="parts" ${weldFilter==='parts'?'selected':''}>Есть части</option><option value="all" ${weldFilter==='all'?'selected':''}>Все типы</option></select>
+<select style="max-width:160px" onchange="weldGhz=this.value;render()"><option value="all" ${weldGhz==='all'?'selected':''}>Все ГГц</option><option value="sheet" ${weldGhz==='sheet'?'selected':''}>5–9 ГГц</option></select></div>
+<div class="pipe" style="margin:10px 0"><div class="step"><span class="small">части, сумма</span><b>${totals.blanks}</b></div><div class="arr">→</div><div class="step"><span class="small">на сварке</span><b class="${totals.welding?'low':''}">${totals.welding}</b></div><div class="arr">→</div><div class="step"><span class="small">рупоры, сумма</span><b>${totals.horns}</b></div></div>
+${cards}
+<p class="small">По партнёрам: ${pTot.map(t=>esc(t.name)+' — отправили '+t.received+', вернули '+t.returned+', на сварке '+t.rem).join('; ')||'—'}${totals.expected?' · ожидается частей: '+totals.expected:''}.</p></div>
 ${dlg}<div class="card"><h2>Журнал сварки</h2><table><tr><th>Когда</th><th>Операция</th><th>Кол-во</th></tr>
 ${(D.weldingLog||[]).slice(0,40).map(l=>`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(l.kind)} · ${esc(l.partnerName||'')} · ${esc(l.code)}</td><td>${l.qty||''}</td></tr>`).join('')||'<tr><td colspan="3" class="small">Пусто</td></tr>'}</table></div>`}
 function weldDlgHtml(){if(!weldDlg)return'<div id="wdlg"></div>';
- const partners=activePartners();const codes=listWeldCodes(D,weldGhz==='sheet'?WELD_SHEET_GHZ:null);
- const mode=weldDlg.mode;const title=mode==='send'?'Отправить на сварку':'Принять рупоры';
+ const partners=activePartners();const map=weldMap();
+ const all=listWeldCodes(D,weldGhz==='sheet'?WELD_SHEET_GHZ:null);
+ const mode=weldDlg.mode;const title=mode==='send'?'Отправить на сварку':'Принять готовые рупоры';
+ let pid=weldDlg.partnerId||(partners[0]&&partners[0]._id)||'';
+ let codes=all;
+ if(mode==='recv'){const withRem=all.filter(c=>weldRem(weldRec(pid,c.code,map))>0);if(withRem.length)codes=withRem}
+ let code=weldDlg.code&&codes.some(c=>c.code===weldDlg.code)?weldDlg.code:(codes[0]&&codes[0].code)||'';
+ if(weldDlg.code&&!codes.some(c=>c.code===weldDlg.code)&&all.some(c=>c.code===weldDlg.code)&&mode==='send'){code=weldDlg.code;if(!codes.some(c=>c.code===code))codes=[...codes,all.find(c=>c.code===code)]}
+ const rec=code?weldRec(pid,code,map):{received:0,returned:0};const rem=weldRem(rec);
+ const parsed=code&&parseWeldCode(code);const blanks=parsed?(D.stock[blankKey(parsed.typeId,parsed.dbi)]||0):0;
+ const horns=parsed?(D.stock[hornKey(parsed.typeId,parsed.dbi)]||0):0;
+ const help=mode==='send'
+  ?`<p class="small">Сейчас частей: <b>${blanks}</b> (хватит на ${Math.floor(blanks/2)} рупоров). У партнёра на сварке: <b>${rem}</b>. Спишется 2×N частей, на сварке станет rem+N. Нельзя отправить больше, чем есть частей.</p>`
+  :`<p class="small">У партнёра на сварке: <b>${rem}</b>. На складе рупоров: <b>${horns}</b>. Принять можно не больше остатка; после приёмки M рупоров станет ${horns}+M, на сварке останется rem−M.</p>`;
  return`<div class="card" id="wdlg"><h2>${title}</h2>
-<label class="small">Партнёр</label><select id="wpartner">${partners.map(p=>`<option value="${p._id}">${esc(p.name)}</option>`).join('')||'<option value="">—</option>'}</select>
-<label class="small">Вариант (код)</label><select id="wcode">${codes.map(c=>`<option value="${c.code}">${esc(c.code)}</option>`).join('')}</select>
-<label class="small">Количество (рупоров / пар)</label><input id="wqty" type="number" min="1" step="1" value="1">
-${mode==='send'?'<p class="small">Спишется 2×N заготовок (можно в минус по учёту — как недосдача в заказах).</p>':'<p class="small">Не больше остатка у партнёра. Рупоры добавятся на склад.</p>'}
+<label class="small">Партнёр</label><select id="wpartner" onchange="weldDlg.partnerId=this.value;render()">${partners.map(p=>`<option value="${p._id}" ${p._id===pid?'selected':''}>${esc(p.name)}</option>`).join('')||'<option value="">—</option>'}</select>
+<label class="small">Тип (ГГц + дБи)</label><select id="wcode" onchange="weldDlg.code=this.value;render()">${codes.map(c=>`<option value="${c.code}" ${c.code===code?'selected':''}>${esc(c.label||c.code)}</option>`).join('')||'<option value="">—</option>'}</select>
+<label class="small">Количество готовых рупоров</label><input id="wqty" type="number" min="1" step="1" value="${weldDlg.qty||1}" oninput="weldDlg.qty=this.value">
+${help}
 <div class="line"><button onclick="weldDlg=null;render()">Отмена</button><button class="p" onclick="doWeld()">${mode==='send'?'Отправить':'Принять'}</button></div></div>`}
 async function doWeld(){const pid=$('#wpartner')&&$('#wpartner').value,code=$('#wcode')&&$('#wcode').value,qty=$('#wqty')&&$('#wqty').value;
- try{if(weldDlg.mode==='send'){const r=await FB.weldSend(pid,code,qty);ok('Отправлено '+r.n+' · заготовок −'+r.deducted+(r.short?' (недост. '+r.short+')':''))}
-  else{const r=await FB.weldRecv(pid,code,qty);ok('Принято '+r.m+' рупоров · остаток у партнёра '+r.remainder)}
+ try{if(weldDlg.mode==='send'){const r=await FB.weldSend(pid,code,qty);ok('Отправлено на сварку '+r.n+' рупоров · частей −'+r.deducted)}
+  else{const r=await FB.weldRecv(pid,code,qty);ok('Принято '+r.m+' рупоров · осталось на сварке '+r.remainder)}
   weldDlg=null}catch(e){bad(FB.err?FB.err(e):e.message||e)}render()}
 
 function backup(){return`<div class="card"><h2>Резервная копия</h2><button class="btn-w" onclick="exp()">⬇ Экспорт JSON</button><label class="small">Импорт JSON:</label><input type="file" accept=".json" onchange="imp(this.files[0])"></div>`}
