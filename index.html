@@ -43,15 +43,15 @@ function seed(){const stock={},thr={};const tv={'3-4':[40,20,20],'4-5':[30,15,3]
 TYPES.forEach(t=>{DEFAULT_DBIS.forEach(dbi=>{stock[t+'|'+dbi+'|horn']=dbi===14?tv[t][0]:0;thr[t+'|'+dbi+'|horn']=10;
  stock[t+'|'+dbi+'|blank']=0;thr[t+'|'+dbi+'|blank']=0});
  DEFAULT_CONNS.forEach(c=>{stock[t+'|'+c+'|cup']=c===1?tv[t][1]:0;thr[t+'|'+c+'|cup']=5})});
-Object.assign(stock,{m24:250,cma:12,cap:TYPES.reduce((s,t)=>s+tv[t][2],0)+30,primer:3000,paint:800});
-Object.assign(thr,{m24:80,cma:10,cap:10,primer:1000,paint:1000});
-return{schema:4,weldingSeeded:true,types:TYPES.map(t=>({id:t,name:t+' ГГц',dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]})),
- shared:[{id:'m24',name:'Винт М24',unit:'шт',qty:8},{id:'cma',name:'CMA разъём',unit:'шт',qty:1},{id:'cap',name:'Заглушка',unit:'шт',qty:1},{id:'primer',name:'Грунт',unit:'мл',qty:50},{id:'paint',name:'Краска',unit:'мл',qty:50}],
+Object.assign(stock,{m24:250,cma:12,cma12:0,cma15:0,cma20:0,cap:TYPES.reduce((s,t)=>s+tv[t][2],0)+30,primer:3000,paint:800});
+Object.assign(thr,{m24:80,cma:10,cma12:5,cma15:5,cma20:5,cap:10,primer:1000,paint:1000});
+return{schema:5,weldingSeeded:true,types:TYPES.map(t=>({id:t,name:t+' ГГц',dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]})),
+ shared:[{id:'m24',name:'Винт М24',unit:'шт',qty:8},{id:'cma',name:'CMA разъём',unit:'шт',qty:1},{id:'cma12',name:'CMA разъём 12',unit:'шт',qty:0},{id:'cma15',name:'CMA разъём 15',unit:'шт',qty:0},{id:'cma20',name:'CMA разъём 20',unit:'шт',qty:0},{id:'cap',name:'Заглушка',unit:'шт',qty:1},{id:'primer',name:'Грунт',unit:'мл',qty:50},{id:'paint',name:'Краска',unit:'мл',qty:50}],
  vbom:{horn:{name:'Рупор',unit:'шт',qty:1},cup:{name:'Стакан',unit:'шт',qty:1},blank:{name:'Заготовка рупора',unit:'шт',qty:2}},thr,stock,orders:[],log:[],users:[]}}
 function migrate(d){if(!d.types){const b=d.bom||{};d.types=TYPES.map(t=>({id:t,name:t+' ГГц',parts:[{id:'horn',name:'Рупор',unit:'шт',qty:b.horn??1},{id:'cup',name:'Стакан',unit:'шт',qty:b.cup??1},{id:'cap',name:'Заглушка',unit:'шт',qty:b.cap??1}]}));
  d.shared=[{id:'m24',name:'Винт М24',unit:'шт',qty:b.m24??8},{id:'cma',name:'CMA разъём',unit:'шт',qty:b.cma??1},{id:'primer',name:'Грунт',unit:'мл',qty:b.primer??50},{id:'paint',name:'Краска',unit:'мл',qty:b.paint??50}];delete d.bom}
 d.users=(d.users||[]).map(u=>({login:u.login||u.name,name:u.name||u.login,pw:u.pw,admin:!!u.admin,disabled:!!u.disabled}));d.stock=d.stock||{};d.thr=d.thr||{};d.orders=d.orders||[];d.log=d.log||[];d.shared=d.shared||[];return d}
-function needsMig(d){if(!d||!d.types||!d.types.length)return false;if(!d.schema||d.schema<4)return true;if(!d.vbom||!d.vbom.horn||d.vbom.horn.qty!==1||!d.vbom.blank)return true;
+function needsMig(d){if(!d||!d.types||!d.types.length)return false;if(!d.schema||d.schema<5)return true;if(!['cma12','cma15','cma20'].every(id=>(d.shared||[]).some(p=>p.id===id)))return true;if(!d.vbom||!d.vbom.horn||d.vbom.horn.qty!==1||!d.vbom.blank)return true;
  if(d.shared.some(p=>p.id==='bush'))return true;if(!d.shared.some(p=>p.id==='cap'))return true;
  if(d.types.some(t=>(t.parts||[]).some(p=>p.id==='cap'||p.id==='horn'||p.id==='cup')))return true;
  if(Object.keys(d.stock||{}).some(k=>{const p=k.split('|');return (p.length===4&&p[3]==='cup')||(p.length===2&&p[1]==='cap')}))return true;
@@ -118,11 +118,22 @@ function migrateV4(d){const notes=[];
   const hk=t.id+'|'+dbi+'|horn';if(d.stock[hk]==null)d.stock[hk]=0;if(d.thr[hk]==null)d.thr[hk]=10})});
  notes.push('Добавлены «Заготовка рупора» (2 шт = 1 рупор на сварку), остаток 0'+(blanks?'; ключей: '+blanks:'')+'.');
  d.schema=4;return{notes:[...new Set(notes)]}}
+function migrateV5(d){const notes=[];
+ if(!d.schema||d.schema<4){const r=migrateV4(d);notes.push(...r.notes)}
+ const extras=[{id:'cma12',name:'CMA разъём 12'},{id:'cma15',name:'CMA разъём 15'},{id:'cma20',name:'CMA разъём 20'}];
+ const added=[];
+ extras.forEach(p=>{if(!(d.shared||[]).some(x=>x.id===p.id)){d.shared.push({id:p.id,name:p.name,unit:'шт',qty:0});added.push('«'+p.name+'»')}
+  if(d.stock[p.id]==null)d.stock[p.id]=0;if(d.thr[p.id]==null)d.thr[p.id]=5});
+ if(added.length)notes.push('Добавлены общие: '+added.join(', ')+' (остаток 0, расход на антенну 0, порог 5). Существующий «CMA разъём» не менялся.');
+ else notes.push('CMA разъём 12/15/20 уже на месте (остатки не перезаписывались).');
+ d.schema=5;return{notes:[...new Set(notes)]}}
 function runMigrations(d){migrate(d);const notes=[];
  if(!d.schema||d.schema<2){const r=migrateV2(d);notes.push(...r.notes)}
  if(!d.schema||d.schema<3){const r=migrateV3(d);notes.push(...r.notes)}
  if(!d.schema||d.schema<4||!d.vbom||!d.vbom.blank||(d.vbom.horn&&d.vbom.horn.qty!==1)||d.types.some(t=>(t.dbis||[]).some(dbi=>d.stock[t.id+'|'+dbi+'|blank']==null))){
   const r=migrateV4(d);notes.push(...r.notes)}
+ if(!d.schema||d.schema<5||!['cma12','cma15','cma20'].every(id=>(d.shared||[]).some(p=>p.id===id))){
+  const r=migrateV5(d);notes.push(...r.notes)}
  return{notes:[...new Set(notes)]}}
 const uid=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 function sharedQty(p,conn){if(p.id==='cma')return +conn;if(p.id==='cap')return +conn===1?1:0;return +p.qty||0}
@@ -245,7 +256,7 @@ async function login(){try{await FB.login($('#un').value,$('#pw').value)}catch(e
 async function bootstrap(){const n=$('#un').value.trim(),p=$('#pw').value;if(!n||p.length<6){bad('Логин и пароль (мин. 6 символов)');return render()}try{await FB.bootstrap(n,p)}catch(e){bad(FB.err(e));render()}}
 function logout(){FB.logout()}
 function migBanner(){let html='';
- if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада → схема 4</b><br>«Рупор» ×1 на антенну (вместо «Деталь для рупора» ×2). Добавляются «Заготовка рупора» (2 шт = 1 рупор) с остатком 0. Сиды партнёров сварки (Роман, Дмитро) и учётные остатки из таблицы — без изменения склада рупоров. Идемпотентно.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему и сиды</button></div></div>`;
+ if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада → схема 5</b><br>${(!D.schema||D.schema<4)?'Также выполнятся предыдущие шаги (рупор ×1, заготовки, сиды сварки). ':''}Добавляются общие комплектующие «CMA разъём 12», «CMA разъём 15», «CMA разъём 20» (остаток 0, расход на антенну 0, порог 5). Существующий «CMA разъём» и его остатки не меняются. Норму на антенну можно править в «Ещё». Идемпотентно.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему и сиды</button></div></div>`;
  else if(!me().admin&&needsMig(D))html+=`<div class="msg w">Администратор должен обновить структуру склада. Новые заказы временно недоступны.</div>`;
  if(D._migNotes&&D._migNotes.length)html+=`<div class="msg" style="background:#24401a"><b>Миграция выполнена</b><ul style="margin:6px 0 0;padding-left:18px">${D._migNotes.map(n=>'<li>'+esc(n)+'</li>').join('')}</ul><button onclick="D._migNotes=null;render()" style="margin-top:8px">Скрыть</button></div>`;
  if(me().admin&&D.inventoryApplied!=='2026-11-09')html+=`<div class="msg w"><b>Применить инвентарь 09.11.2026</b><br>Запишет остатки стаканов и рупоров для 5–9 ГГц по таблице (общие детали, 3–4/4–5 ГГц и заглушку не трогает). Каждое изменение — в лог как корректировка.<div class="line" style="margin-top:8px"><button class="p" onclick="doInvApply(false)">Применить инвентарь</button></div></div>`;
@@ -371,7 +382,7 @@ ${t?`<div class="line"><input value="${esc(t.name)}" onchange="if(this.value.tri
 <label class="small">дБи через запятую</label><input value="${(t.dbis||[]).join(',')}" onchange="setDbis('${tid}',this.value)">
 <label class="small">Число разъёмов через запятую</label><input value="${(t.conns||[]).join(',')}" onchange="setConns('${tid}',this.value)">
 <p class="small">Рупор: ГГц+дБи (×${D.vbom?.horn?.qty??1}). Заготовка: ГГц+дБи (2 шт = 1 рупор на сварку). Стакан: ГГц+разъёмы (×${D.vbom?.cup?.qty??1}).</p>
-<h3>Детали на весь ${esc(t.name)}</h3>`:'<p class="small">Общие детали. CMA = число разъёмов; Заглушка = 1 при 1 разъёме, 0 при 2.</p>'}
+<h3>Детали на весь ${esc(t.name)}</h3>`:'<p class="small">Общие детали. CMA = число разъёмов; Заглушка = 1 при 1 разъёме, 0 при 2. CMA 12/15/20 — расход на антенну задаётся здесь (сейчас 0, списание позже).</p>'}
 <table><tr><th>Деталь</th><th>Ед.</th><th>На 1</th><th>Мин.</th><th></th></tr>${parts.map(p=>{const k=tid?tid+'|'+p.id:p.id;const qtyShow=(!tid&&(p.id==='cma'||p.id==='cap'))?sharedQtyHint(p):p.qty;
  return`<tr><td><input style="margin:0" value="${esc(p.name)}" onchange="pSet('${tid}','${p.id}','name',this.value)"></td><td><input style="margin:0;width:56px" value="${esc(p.unit)}" onchange="pSet('${tid}','${p.id}','unit',this.value)"></td>
 <td>${(!tid&&(p.id==='cma'||p.id==='cap'))?`<span class="small">${esc(qtyShow)}</span>`:`<input style="margin:0;width:64px" type="number" value="${p.qty}" onchange="pSet('${tid}','${p.id}','qty',this.value)">`}</td>

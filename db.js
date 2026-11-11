@@ -49,7 +49,7 @@ async function txStock(fn){const ts=new Date().toISOString();return F.runTransac
  tx.update(R.stock,{stock:d.stock,next:d._next!=null?d._next:(d.orders.length?d.orders[0].id+1:(s.next||1))});
  d.log.forEach(l=>tx.set(F.doc(F.collection(db,'log')),{...l,uid:ME.uid}));d.orders.forEach(o=>tx.set(F.doc(F.collection(db,'orders')),{...o,uid:ME.uid}));return r})}
 const withTimeout=(p,ms=15000)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j({code:'unavailable'}),ms))]);
-const cfgData=()=>({types:D.types,shared:D.shared,thr:D.thr,schema:D.schema||4,vbom:D.vbom||{horn:{name:'Рупор',unit:'шт',qty:1},cup:{name:'Стакан',unit:'шт',qty:1},blank:{name:'Заготовка рупора',unit:'шт',qty:2}},inventoryApplied:D.inventoryApplied||null,weldingSeeded:!!D.weldingSeeded});
+const cfgData=()=>({types:D.types,shared:D.shared,thr:D.thr,schema:D.schema||5,vbom:D.vbom||{horn:{name:'Рупор',unit:'шт',qty:1},cup:{name:'Стакан',unit:'шт',qty:1},blank:{name:'Заготовка рупора',unit:'шт',qty:2}},inventoryApplied:D.inventoryApplied||null,weldingSeeded:!!D.weldingSeeded});
 async function seedWelding(batch,force){
   const notes=[];
   for(const p of WELD_SEED_PARTNERS){
@@ -183,7 +183,7 @@ W.FB={err,email,
   D.types=d.types;D.shared=d.shared;D.thr=d.thr;D.schema=d.schema;D.vbom=d.vbom;D.stock=d.stock;D.weldingSeeded=true;D.inventoryApplied=cfg.inventoryApplied||null;D._migNotes=notes;
   return notes},
  async importLocal(o){migrate(o);if(needsMig(o))runMigrations(o);
-  const ops=[[R.cfg,{types:o.types,shared:o.shared,thr:o.thr,schema:o.schema||4,vbom:o.vbom,weldingSeeded:!!o.weldingSeeded,inventoryApplied:o.inventoryApplied||null}],[R.stock,{stock:o.stock,next:(o.orders.reduce((m,x)=>Math.max(m,x.id||0),0))+1}],
+  const ops=[[R.cfg,{types:o.types,shared:o.shared,thr:o.thr,schema:o.schema||5,vbom:o.vbom,weldingSeeded:!!o.weldingSeeded,inventoryApplied:o.inventoryApplied||null}],[R.stock,{stock:o.stock,next:(o.orders.reduce((m,x)=>Math.max(m,x.id||0),0))+1}],
   ...o.orders.map(x=>[F.doc(db,'orders',String(x.id).padStart(6,'0')),{status:'done',doneAt:x.ts,...x,uid:ME.uid}]),...o.log.map(x=>[F.doc(F.collection(db,'log')),{...x,name:x.name||partName(o,x.key),uid:ME.uid}])];
   for(let i=0;i<ops.length;i+=400){const b=F.writeBatch(db);ops.slice(i,i+400).forEach(([r,v])=>b.set(r,JSON.parse(JSON.stringify(v))));await b.commit()}}
 };
