@@ -24,10 +24,10 @@ const ERR={'auth/invalid-credential':'Неверный логин или пар�
 const err=e=>ERR[e.code]||e.message||String(e);
 async function checkBoot(){try{BOOT=(await F.getDoc(R.pub)).exists()}catch(e){BOOT=true}}
 const docs=s=>s.docs.map(d=>({...d.data(),_id:d.id}));
-function startSync(){D={types:[],shared:[],thr:{},stock:{},expected:{},orders:[],log:[],users:[],clients:[],partners:[],welding:[],weldingLog:[],schema:0,vbom:null,inventoryApplied:null,weldingSeeded:false};let got={cfg:0,stock:0};
+function startSync(){D={types:[],shared:[],thr:{},stock:{},expected:{},buyDismissedThrough:0,orders:[],log:[],users:[],clients:[],partners:[],welding:[],weldingLog:[],schema:0,vbom:null,inventoryApplied:null,weldingSeeded:false};let got={cfg:0,stock:0};
  const done=()=>{if(got.cfg&&got.stock){if(!D.types.length){const s=seed();D.types=s.types;D.shared=s.shared;D.thr=s.thr;D.schema=s.schema;D.vbom=s.vbom;D.weldingSeeded=!!s.weldingSeeded;D.expected=s.expected||D.expected||{}}remote()}};
  subs.push(F.onSnapshot(R.cfg,s=>{const c=s.data()||{};D.types=c.types||[];D.shared=c.shared||[];D.thr=c.thr||{};D.schema=c.schema||0;D.vbom=c.vbom||null;D.inventoryApplied=c.inventoryApplied||null;D.weldingSeeded=!!c.weldingSeeded;got.cfg=1;done()},e=>fail(e)));
- subs.push(F.onSnapshot(R.stock,s=>{const x=s.data()||{};D.stock=x.stock||{};D.expected=x.expected||{};got.stock=1;done()},e=>fail(e)));
+ subs.push(F.onSnapshot(R.stock,s=>{const x=s.data()||{};D.stock=x.stock||{};D.expected=x.expected||{};D.buyDismissedThrough=+x.buyDismissedThrough||0;D.buyDismissedAt=x.buyDismissedAt||null;got.stock=1;done()},e=>fail(e)));
  subs.push(F.onSnapshot(F.collection(db,'users'),s=>{D.users=docs(s).map(u=>({...u,uid:u._id}));const m=D.users.find(u=>u.uid===ME.uid);
    if(!m||m.active===false){bad('Доступ отключён администратором');FB.logout();return}ME=m;done()},e=>fail(e)));
  subs.push(F.onSnapshot(F.query(F.collection(db,'orders'),F.orderBy('id','desc'),F.limit(500)),s=>{D.orders=docs(s);done()},e=>fail(e)));
@@ -193,6 +193,11 @@ W.FB={err,email,
    tx.update(R.stock,{stock,expected,next:s.next||1});
    tx.set(F.doc(F.collection(db,'log')),{ts:new Date().toISOString(),user:U,uid:ME.uid,key:bk,name:partName(D,bk),delta:n,kind:'Приход от поставщика (ожидалось)'});
    return{n,expected:expected[k],stock:stock[bk]}}))},
+ async dismissBuyAlert(){const through=Math.max(0,...(D.orders||[]).map(o=>+o.id||0));
+  return withTimeout(F.runTransaction(db,async tx=>{
+   const s=await tx.get(R.stock);if(!s.exists)throw Error('Нет документа склада');
+   tx.update(R.stock,{buyDismissedThrough:through,buyDismissedAt:new Date().toISOString(),buyDismissedBy:U});
+   return{through}}))},
  async completeOrder(oid){return withTimeout(F.runTransaction(db,async tx=>{const ref=F.doc(db,'orders',oid);const snap=await tx.get(ref);const o=snap.data();
   if(!o)throw Error('Заказ не найден');if(o.status&&o.status!=='active')throw Error('Заказ уже не в работе');
   tx.update(ref,{status:'done',doneAt:new Date().toISOString(),doneBy:U})}))},
@@ -235,7 +240,7 @@ W.FB={err,email,
   D.types=d.types;D.shared=d.shared;D.thr=d.thr;D.schema=d.schema;D.vbom=d.vbom;D.stock=d.stock;D.expected=d.expected||{};D.weldingSeeded=true;D.inventoryApplied=cfg.inventoryApplied||null;D._migNotes=notes;
   return notes},
  async importLocal(o){migrate(o);if(needsMig(o))runMigrations(o);
-  const ops=[[R.cfg,{types:o.types,shared:o.shared,thr:o.thr,schema:o.schema||6,vbom:o.vbom,weldingSeeded:!!o.weldingSeeded,inventoryApplied:o.inventoryApplied||null}],[R.stock,{stock:o.stock,expected:o.expected||{},next:(o.orders.reduce((m,x)=>Math.max(m,x.id||0),0))+1}],
+  const ops=[[R.cfg,{types:o.types,shared:o.shared,thr:o.thr,schema:o.schema||6,vbom:o.vbom,weldingSeeded:!!o.weldingSeeded,inventoryApplied:o.inventoryApplied||null}],[R.stock,{stock:o.stock,expected:o.expected||{},next:(o.orders.reduce((m,x)=>Math.max(m,x.id||0),0))+1,buyDismissedThrough:o.buyDismissedThrough||0,buyDismissedAt:o.buyDismissedAt||null}],
   ...o.orders.map(x=>[F.doc(db,'orders',String(x.id).padStart(6,'0')),{status:'done',doneAt:x.ts,...x,uid:ME.uid}]),...o.log.map(x=>[F.doc(F.collection(db,'log')),{...x,name:x.name||partName(o,x.key),uid:ME.uid}])];
   for(let i=0;i<ops.length;i+=400){const b=F.writeBatch(db);ops.slice(i,i+400).forEach(([r,v])=>b.set(r,JSON.parse(JSON.stringify(v))));await b.commit()}}
 };

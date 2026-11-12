@@ -265,7 +265,7 @@ const INV_STOCK_20261109={
 
 let D=null,U=null,ME=null,STATUS='loading',BOOT=false,view='inv',invTab='shared',bomTab='shared',lines=[],flash='',PENDING=false,FT=0;
 let oFilter='',oSort='deadline',oDir=1,hFilter='',hSort='ts',hDir=-1,cliEdit=null,deadMode='days',deadDays=7,orderOpen=null,logOpen=null,buyAlert='';
-let weldFilter='act',weldGhz='all',weldDlg=null,partEdit=null,blanksOpen=false,expDlg=null;
+let weldFilter='act',weldGhz='all',weldDlg=null,partEdit=null,blanksOpen=false,expDlg=null,weldScroll=false;
 const me=()=>(D&&ME&&D.users.find(u=>u.uid===ME.uid))||ME||{};
 const saveCfg=()=>FB.saveConfig().catch(e=>{bad('Ошибка сохранения: '+FB.err(e));render()});
 function remote(){const a=document.activeElement;if(document.querySelector('nav')&&a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)&&a.type!=='file'){PENDING=true;return}render()}
@@ -280,7 +280,8 @@ if(STATUS==='noconfig'){a.innerHTML='<main><div class="card msg e" style="margin
 if(!U||!D){a.innerHTML=authView();flash='';return}
 if(!lines.length){const v=listVariants(D)[0];lines=[{variant:v?v.id:'3-4|14|1',qty:1}]}
 a.innerHTML=`<header><b>SPRUT·CRM</b><span class="small">${esc(me().name)}${me().admin?' (админ)':''} <button onclick="logout()" style="min-height:36px">Выйти</button></span></header><main>${migBanner()}${buyAlert}${Date.now()-FT<5000?flash:''}${({inv:invView,weld:weldView,order:orderView,orders:ordersView,hist:histView,set:setView})[view]()}</main>
-<nav>${[['inv','📦 Склад'],['weld','🔩 Сварка'],['order','➕ Заказ'],['orders','📋 В работе'],['hist','🗂 Архив'],['set','⚙️ Ещё']].map(([v,t])=>`<button class="${view===v?'on':''}" onclick="go('${v}')">${t}</button>`).join('')}</nav>`}
+<nav>${[['inv','📦 Склад'],['weld','🔩 Сварка'],['order','➕ Заказ'],['orders','📋 В работе'],['hist','🗂 Архив'],['set','⚙️ Ещё']].map(([v,t])=>`<button class="${view===v?'on':''}" onclick="go('${v}')">${t}</button>`).join('')}</nav>`;
+ if(weldScroll){weldScroll=false;const el=$('#wdlg');if(el)setTimeout(()=>el.scrollIntoView({block:'start',behavior:'smooth'}),0)}}
 const AI='autocapitalize="none" autocorrect="off" spellcheck="false"';
 function authView(){const first=!BOOT;return`<main><form class="card" style="margin-top:12vh" onsubmit="${first?'bootstrap':'login'}();return false"><h2 style="color:var(--acc)">SPRUT·CRM</h2>${flash}
 <p class="small">${first?'Первый запуск: создайте учётную запись администратора.':'Вход только для доверенных лиц. Учётные записи выдаёт администратор.'}</p>
@@ -320,8 +321,8 @@ ${items.map(it=>`<div class="row"><span><b>${esc(it.label)}</b><br><span class="
    const exp=(D.expected||{})[expectKey(t.id,dbi)]||0;
    return`<details class="vsec" open><summary>${dbi} дБи ${warn?'⚠️':''}</summary>${rowP(hk,'Рупор','×'+(D.vbom?.horn?.qty??1)+' на антенну · мин. '+(D.thr[hk]||0))}${rowP(bk,'Заготовка рупора','2 шт = 1 рупор · ожидается '+exp+' · мин. '+(D.thr[bk]||0))}</details>`}).join('');
   body=`<div class="card"><h2>Антенна ${esc(t.name)}</h2><h3>Стаканы (на весь диапазон)</h3>${cups}<h3>Рупоры / заготовки по дБи</h3>${horns}${ghzParts?`<h3>Прочее</h3>${ghzParts}`:''}</div>`}
- const buys=openShortfalls();
- return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}${buys.length?`<div class="msg e"><b>Докупить по заказам в работе</b><table style="margin-top:6px"><tr><th>Деталь</th><th>Не хватает</th></tr>${buys.map(p=>{const hint=hornShortHint(D,p.key);return`<tr><td>${esc(p.name)}${hint?'<br><span class="small">'+esc(hint)+'</span>':''}</td><td class="zero">${p.short}</td></tr>`}).join('')}</table></div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${warnType(t)?' ⚠️':''}</button>`).join('')}</div>${body}
+ const buys=buyAlertVisible()?openShortfalls():[];
+ return`${lowN?`<div class="msg w">⚠️ Мало на складе: ${lowN} позиц.</div>`:''}${buys.length?`<div class="msg e" id="buyNeed"><b>Докупить по заказам в работе</b><table style="margin-top:6px"><tr><th>Деталь</th><th>Не хватает</th></tr>${buys.map(p=>{const hint=hornShortHint(D,p.key);return`<tr><td>${esc(p.name)}${hint?'<br><span class="small">'+esc(hint)+'</span>':''}</td><td class="zero">${p.short}</td></tr>`}).join('')}</table><button class="p btn-w" style="margin-top:8px" onclick="dismissBuy()">Уже решено</button></div>`:''}<div class="tabs"><button class="${invTab==='shared'?'on':''}" onclick="invTab='shared';render()">Общие</button>${D.types.map(t=>`<button class="${invTab===t.id?'on':''}" onclick="invTab='${t.id}';render()">${esc(t.name)}${warnType(t)?' ⚠️':''}</button>`).join('')}</div>${body}
 <div class="card"><h2>Экспорт остатков</h2><div class="line"><button id="exp-xlsx" onclick="doExport('xlsx')">📊 Excel</button><button id="exp-pdf" onclick="doExport('pdf')">📄 PDF</button></div><p class="small">Структура: общие → части рупора и ожидание → ГГц (стаканы 1/2) → рупоры и заготовки по дБи → конвейер сварки.</p></div><div id="dlg"></div>`}
 function warnType(t){return allKeys({types:[t],shared:[],vbom:D.vbom}).some(k=>cls(k)!=='ok')}
 function adjDlg(k){$('#dlg').innerHTML=`<div class="card"><h2>${esc(partName(D,k))}</h2><p>Сейчас: <b>${D.stock[k]||0} ${esc(partUnit(D,k))}</b></p><select id="am"><option value="add">Приход (+ к остатку)</option><option value="set">Корректировка (точный остаток)</option></select>
@@ -380,6 +381,9 @@ function sortOrders(list,sort,dir,filter){let a=list.filter(o=>{if(!filter)retur
   else if(sort==='client')r=coll.compare(x.clientName||'',y.clientName||'');
   else r=x.id-y.id;return r*dir});return a}
 function openShortfalls(){const map={};(D.orders||[]).filter(o=>orderStatus(o)==='active').forEach(o=>{(o.shortfalls||[]).forEach(p=>{if(!(p.short>0))return;const k=p.key;map[k]=map[k]||{key:k,name:p.name||partName(D,k),short:0};map[k].short+=p.short})});return Object.values(map).sort((a,b)=>coll.compare(a.name,b.name))}
+function shortfallOrders(){return(D.orders||[]).filter(o=>orderStatus(o)==='active'&&(o.hasShortfall||(o.shortfalls||[]).some(p=>p.short>0)))}
+function buyAlertVisible(){if(!openShortfalls().length)return false;const through=+D.buyDismissedThrough||0;return shortfallOrders().some(o=>(+o.id||0)>through)}
+async function dismissBuy(){if(!confirm('Точно убрать это сообщение?'))return;try{await FB.dismissBuyAlert();ok('Сообщение скрыто')}catch(e){bad(FB.err?FB.err(e):e.message||e)}render()}
 function partsBlock(o){const parts=o.parts||[];if(!parts.length)return`<p class="small">Нет данных о списании (старый заказ).</p>`;
  return`<table><tr><th>Деталь</th><th>Нужно</th><th>Списано</th><th>Докупить</th></tr>${parts.map(p=>`<tr><td>${esc(p.name||partName(D,p.key))}</td><td>${p.need??'—'}</td><td>${p.deducted??'—'}</td><td class="${p.short?'zero':''}">${p.short||'—'}</td></tr>`).join('')}</table>${(o.shortfalls||[]).length?`<p class="small zero">Требуется докупка: ${o.shortfalls.map(p=>esc(p.name)+' ×'+p.short).join(', ')}</p>`:''}`}
 function orderRow(o,mode){const open=orderOpen===o._id;const d=daysLeft(o.deadline);const rowCls=mode==='active'?(d!=null&&d<0?'over':d!=null&&d<=2?'near':''):'';
@@ -499,19 +503,32 @@ function weldView(){if(needsMig(D))return`<div class="card"><p class="small">С�
 <div class="pipe"><div class="step"><span class="small">части</span><b class="${p.blanks?'ok':'zero'}">${p.blanks}</b></div><div class="arr">→</div>
 <div class="step"><span class="small">на сварке</span><b class="${p.welding?'low':''}">${p.welding}</b><div class="small">${p.welding?by:'—'}</div></div><div class="arr">→</div>
 <div class="step"><span class="small">рупоры</span><b class="${p.horns?'ok':'zero'}">${p.horns}</b></div></div>
-<div class="line" style="margin-top:8px"><button onclick="weldDlg={mode:'send',code:'${p.code||weldCode(p.typeId,p.dbi)}'};render()">Отправить</button><button ${p.welding?'':'disabled style="opacity:.45"'} onclick="weldDlg={mode:'recv',code:'${p.code||weldCode(p.typeId,p.dbi)}'};render()">Принять</button></div></div>`}).join('')||'<p class="small">Нет строк по фильтру.</p>';
+<div class="line" style="margin-top:8px"><button onclick="openWeldDlg('send','${p.code||weldCode(p.typeId,p.dbi)}')">Отправить</button><button ${p.welding?'':'disabled style="opacity:.45"'} onclick="openWeldDlg('recv','${p.code||weldCode(p.typeId,p.dbi)}')">Принять</button></div></div>`}).join('')||'<p class="small">Нет строк по фильтру.</p>';
  const dlg=weldDlgHtml();
  const pTot=partners.map(pr=>{let rec=0,ret=0;codes.forEach(c=>{const w=weldRec(pr._id,c.code,map);rec+=+w.received||0;ret+=+w.returned||0});return{name:pr.name,received:rec,returned:ret,rem:Math.max(0,rec-ret)}});
  return`<div class="card"><h2>Сварка — конвейер</h2>
 <p class="small">Части на складе → на сварке у партнёра → готовые рупоры. Отправили N рупоров: −2N частей, на сварке +N. Приняли M: со сварки −M, рупоры +M. Неполный возврат так и остаётся «на сварке».</p>
-<div class="line"><button class="p" onclick="weldDlg={mode:'send'};render()">Отправить</button><button class="p" onclick="weldDlg={mode:'recv'};render()">Принять</button></div>
+<div class="line"><button class="p" onclick="openWeldDlg('send')">Отправить</button><button class="p" onclick="openWeldDlg('recv')">Принять</button></div>
+${dlg}
 <div class="line" style="flex-wrap:wrap"><select style="max-width:170px" onchange="weldFilter=this.value;render()"><option value="act" ${weldFilter==='act'?'selected':''}>С наличием / движением</option><option value="rem" ${weldFilter==='rem'?'selected':''}>На сварке</option><option value="parts" ${weldFilter==='parts'?'selected':''}>Есть части</option><option value="all" ${weldFilter==='all'?'selected':''}>Все типы</option></select>
 <select style="max-width:160px" onchange="weldGhz=this.value;render()"><option value="all" ${weldGhz==='all'?'selected':''}>Все ГГц</option><option value="sheet" ${weldGhz==='sheet'?'selected':''}>5–9 ГГц</option></select></div>
 <div class="pipe" style="margin:10px 0"><div class="step"><span class="small">части, сумма</span><b>${totals.blanks}</b></div><div class="arr">→</div><div class="step"><span class="small">на сварке</span><b class="${totals.welding?'low':''}">${totals.welding}</b></div><div class="arr">→</div><div class="step"><span class="small">рупоры, сумма</span><b>${totals.horns}</b></div></div>
 ${cards}
 <p class="small">По партнёрам: ${pTot.map(t=>esc(t.name)+' — отправили '+t.received+', вернули '+t.returned+', на сварке '+t.rem).join('; ')||'—'}${totals.expected?' · ожидается частей: '+totals.expected:''}.</p></div>
-${dlg}<div class="card"><h2>Журнал сварки</h2><table><tr><th>Когда</th><th>Операция</th><th>Кол-во</th></tr>
+<div class="card"><h2>Журнал сварки</h2><table><tr><th>Когда</th><th>Операция</th><th>Кол-во</th></tr>
 ${(D.weldingLog||[]).slice(0,40).map(l=>`<tr><td class="small">${fmt(l.ts)}<br>${esc(l.user)}</td><td>${esc(l.kind)} · ${esc(l.partnerName||'')} · ${esc(l.code)}</td><td>${l.qty||''}</td></tr>`).join('')||'<tr><td colspan="3" class="small">Пусто</td></tr>'}</table></div>`}
+function openWeldDlg(mode,code){weldDlg={mode,code:code||(weldDlg&&weldDlg.code)||undefined,partnerId:weldDlg&&weldDlg.partnerId,qty:weldDlg&&weldDlg.qty||1};weldScroll=true;render()}
+function weldHintText(){if(!weldDlg)return'';
+ const partners=activePartners(),map=weldMap();
+ const pid=weldDlg.partnerId||(partners[0]&&partners[0]._id)||'';
+ const parsed=weldDlg.code&&parseWeldCode(weldDlg.code);
+ const rec=weldDlg.code?weldRec(pid,weldDlg.code,map):{received:0,returned:0};const rem=weldRem(rec);
+ const blanks=parsed?(D.stock[blankKey(parsed.typeId,parsed.dbi)]||0):0;
+ const horns=parsed?(D.stock[hornKey(parsed.typeId,parsed.dbi)]||0):0;
+ const n=Math.max(1,Math.floor(+weldDlg.qty||1));
+ if(weldDlg.mode==='send')return`Сейчас частей: ${blanks} (хватит на ${Math.floor(blanks/2)} рупоров). У партнёра на сварке: ${rem}. Спишется ${2*n} частей, на сварке станет ${rem+n}. Нельзя отправить больше, чем есть частей.`;
+ return`У партнёра на сварке: ${rem}. На складе рупоров: ${horns}. Принять можно не больше остатка; после приёмки ${n} рупоров станет ${horns+n}, на сварке останется ${Math.max(0,rem-n)}.`}
+function updWeldHint(){if(!weldDlg)return;weldDlg.qty=$('#wqty')&&$('#wqty').value;const el=$('#whint');if(el)el.textContent=weldHintText()}
 function weldDlgHtml(){if(!weldDlg)return'<div id="wdlg"></div>';
  const partners=activePartners();const map=weldMap();
  const all=listWeldCodes(D,weldGhz==='sheet'?WELD_SHEET_GHZ:null);
@@ -521,17 +538,13 @@ function weldDlgHtml(){if(!weldDlg)return'<div id="wdlg"></div>';
  if(mode==='recv'){const withRem=all.filter(c=>weldRem(weldRec(pid,c.code,map))>0);if(withRem.length)codes=withRem}
  let code=weldDlg.code&&codes.some(c=>c.code===weldDlg.code)?weldDlg.code:(codes[0]&&codes[0].code)||'';
  if(weldDlg.code&&!codes.some(c=>c.code===weldDlg.code)&&all.some(c=>c.code===weldDlg.code)&&mode==='send'){code=weldDlg.code;if(!codes.some(c=>c.code===code))codes=[...codes,all.find(c=>c.code===code)]}
- const rec=code?weldRec(pid,code,map):{received:0,returned:0};const rem=weldRem(rec);
- const parsed=code&&parseWeldCode(code);const blanks=parsed?(D.stock[blankKey(parsed.typeId,parsed.dbi)]||0):0;
- const horns=parsed?(D.stock[hornKey(parsed.typeId,parsed.dbi)]||0):0;
- const help=mode==='send'
-  ?`<p class="small">Сейчас частей: <b>${blanks}</b> (хватит на ${Math.floor(blanks/2)} рупоров). У партнёра на сварке: <b>${rem}</b>. Спишется 2×N частей, на сварке станет rem+N. Нельзя отправить больше, чем есть частей.</p>`
-  :`<p class="small">У партнёра на сварке: <b>${rem}</b>. На складе рупоров: <b>${horns}</b>. Принять можно не больше остатка; после приёмки M рупоров станет ${horns}+M, на сварке останется rem−M.</p>`;
+ weldDlg.partnerId=pid;weldDlg.code=code;
+ const n=Math.max(1,Math.floor(+weldDlg.qty||1));
  return`<div class="card" id="wdlg"><h2>${title}</h2>
 <label class="small">Партнёр</label><select id="wpartner" onchange="weldDlg.partnerId=this.value;render()">${partners.map(p=>`<option value="${p._id}" ${p._id===pid?'selected':''}>${esc(p.name)}</option>`).join('')||'<option value="">—</option>'}</select>
 <label class="small">Тип (ГГц + дБи)</label><select id="wcode" onchange="weldDlg.code=this.value;render()">${codes.map(c=>`<option value="${c.code}" ${c.code===code?'selected':''}>${esc(c.label||c.code)}</option>`).join('')||'<option value="">—</option>'}</select>
-<label class="small">Количество готовых рупоров</label><input id="wqty" type="number" min="1" step="1" value="${weldDlg.qty||1}" oninput="weldDlg.qty=this.value">
-${help}
+<label class="small">Количество готовых рупоров</label><input id="wqty" type="number" min="1" step="1" value="${n}" oninput="updWeldHint()">
+<p class="small" id="whint">${esc(weldHintText())}</p>
 <div class="line"><button onclick="weldDlg=null;render()">Отмена</button><button class="p" onclick="doWeld()">${mode==='send'?'Отправить':'Принять'}</button></div></div>`}
 async function doWeld(){const pid=$('#wpartner')&&$('#wpartner').value,code=$('#wcode')&&$('#wcode').value,qty=$('#wqty')&&$('#wqty').value;
  try{if(weldDlg.mode==='send'){const r=await FB.weldSend(pid,code,qty);ok('Отправлено на сварку '+r.n+' рупоров · частей −'+r.deducted)}
