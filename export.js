@@ -53,7 +53,7 @@ async function buildXlsx(d,who){await loadJs(XL.exceljs);const S=stamp(),wb=new 
  ws.columns=[{width:28},{width:40},{width:12},{width:8},{width:10},{width:10}];
  ws.mergeCells('A1:F1');ws.getCell('A1').value='SprutTactical — остатки склада';ws.getCell('A1').font={bold:true,size:16};
  ws.mergeCells('A2:F2');ws.getCell('A2').value='Дата: '+S.txt+' · Выгрузил: '+who;ws.getCell('A2').font={italic:true,color:{argb:'FF555555'}};
- ws.mergeCells('A3:F3');ws.getCell('A3').value='CMA = разъёмы; Заглушка = 1 при 1 разъёме; рупор и заготовка по ГГц+дБи; стакан по ГГц+разъёмам; части / на сварке / готовые рупоры';ws.getCell('A3').font={size:9,color:{argb:'FF666666'}};
+ ws.mergeCells('A3:F3');ws.getCell('A3').value='CMA 20=3-4 ГГц, CMA 15=5-6 ГГц, CMA 12=остальные (×разъёмы); старый CMA не списывается; Заглушка = 1 при 1 разъёме; рупор и заготовка по ГГц+дБи; стакан по ГГц+разъёмам; части / на сварке / готовые рупоры';ws.getCell('A3').font={size:9,color:{argb:'FF666666'}};
  const h=ws.getRow(4);h.values=['Тип/раздел','Деталь','Остаток','Ед.','Порог','Статус'];h.eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:COL.head}}});
  const bd={style:'thin',color:{argb:'FFBBBBBB'}};let n={ok:0,low:0,zero:0,all:0};
  for(const s of invRows(d)){const r=ws.addRow([s.title]);ws.mergeCells(`A${r.number}:F${r.number}`);r.getCell(1).font={bold:true};r.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:COL.sec}};
@@ -67,7 +67,7 @@ const b64=buf=>{let s='',u=new Uint8Array(buf);for(let i=0;i<u.length;i+=32768)s
 async function buildPdf(d,who){await loadJs(XL.jspdf);await loadJs(XL.at);const S=stamp();const[f1,f2]=await Promise.all([XL.font,XL.fontB].map(u=>fetch(u).then(r=>{if(!r.ok)throw Error('Шрифт не загрузился');return r.arrayBuffer()})));
  const doc=new jspdf.jsPDF({unit:'mm',format:'a4'});doc.addFileToVFS('DV.ttf',b64(f1));doc.addFont('DV.ttf','DV','normal');doc.addFileToVFS('DVB.ttf',b64(f2));doc.addFont('DVB.ttf','DV','bold');doc.setFont('DV','bold');
  doc.setFontSize(16);doc.text('SprutTactical — остатки склада',14,16);doc.setFont('DV','normal');doc.setFontSize(9);doc.setTextColor(90);doc.text('Дата: '+S.txt+'   ·   Выгрузил: '+who,14,22);
- doc.text('CMA=разъёмы; Заглушка=1 при 1; рупор/заготовка по дБи; стакан по ГГц+разъёмам; конвейер сварки',14,26);doc.setTextColor(0);
+ doc.text('CMA 20=3-4, CMA 15=5-6, CMA 12=остальные (×разъёмы); Заглушка=1 при 1; рупор/заготовка по дБи; стакан по ГГц+разъёмам; конвейер сварки',14,26);doc.setTextColor(0);
  const body=[];let n={ok:0,low:0,zero:0,all:0};for(const s of invRows(d)){body.push([{content:s.title,colSpan:6,styles:{fontStyle:'bold',fillColor:[221,230,207]}}]);
   s.rows.forEach(x=>{n.all++;n[x.status==='OK'?'ok':x.status==='Мало'?'low':'zero']++;body.push([x.sec,x.name,x.qty,x.unit,x.thr,x.status])})}
  doc.autoTable({startY:30,head:[['Тип/раздел','Деталь','Остаток','Ед.','Порог','Статус']],body,styles:{font:'DV',fontSize:8,cellPadding:1.4},headStyles:{font:'DV',fontStyle:'bold',fillColor:[44,53,61]},

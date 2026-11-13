@@ -46,13 +46,13 @@ TYPES.forEach(t=>{DEFAULT_DBIS.forEach(dbi=>{stock[t+'|'+dbi+'|horn']=dbi===14?t
  DEFAULT_CONNS.forEach(c=>{stock[t+'|'+c+'|cup']=c===1?tv[t][1]:0;thr[t+'|'+c+'|cup']=5})});
 Object.assign(stock,{m24:250,cma:12,cma12:0,cma15:0,cma20:0,cap:TYPES.reduce((s,t)=>s+tv[t][2],0)+30,primer:3000,paint:800});
 Object.assign(thr,{m24:80,cma:10,cma12:5,cma15:5,cma20:5,cap:10,primer:1000,paint:1000});
-return{schema:6,weldingSeeded:true,expected:{},types:TYPES.map(t=>({id:t,name:t+' ГГц',dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]})),
- shared:[{id:'m24',name:'Винт М24',unit:'шт',qty:8},{id:'cma',name:'CMA разъём',unit:'шт',qty:1},{id:'cma12',name:'CMA разъём 12',unit:'шт',qty:0},{id:'cma15',name:'CMA разъём 15',unit:'шт',qty:0},{id:'cma20',name:'CMA разъём 20',unit:'шт',qty:0},{id:'cap',name:'Заглушка',unit:'шт',qty:1},{id:'primer',name:'Грунт',unit:'мл',qty:50},{id:'paint',name:'Краска',unit:'мл',qty:50}],
+return{schema:7,weldingSeeded:true,expected:{},types:TYPES.map(t=>({id:t,name:t+' ГГц',dbis:[...DEFAULT_DBIS],conns:[...DEFAULT_CONNS],parts:[]})),
+ shared:[{id:'m24',name:'Винт М24',unit:'шт',qty:8},{id:'cma',name:'CMA разъём',unit:'шт',qty:0},{id:'cma12',name:'CMA разъём 12',unit:'шт',qty:0},{id:'cma15',name:'CMA разъём 15',unit:'шт',qty:0},{id:'cma20',name:'CMA разъём 20',unit:'шт',qty:0},{id:'cap',name:'Заглушка',unit:'шт',qty:1},{id:'primer',name:'Грунт',unit:'мл',qty:50},{id:'paint',name:'Краска',unit:'мл',qty:50}],
  vbom:{horn:{name:'Рупор',unit:'шт',qty:1},cup:{name:'Стакан',unit:'шт',qty:1},blank:{name:'Заготовка рупора',unit:'шт',qty:2}},thr,stock,orders:[],log:[],users:[]}}
 function migrate(d){if(!d.types){const b=d.bom||{};d.types=TYPES.map(t=>({id:t,name:t+' ГГц',parts:[{id:'horn',name:'Рупор',unit:'шт',qty:b.horn??1},{id:'cup',name:'Стакан',unit:'шт',qty:b.cup??1},{id:'cap',name:'Заглушка',unit:'шт',qty:b.cap??1}]}));
  d.shared=[{id:'m24',name:'Винт М24',unit:'шт',qty:b.m24??8},{id:'cma',name:'CMA разъём',unit:'шт',qty:b.cma??1},{id:'primer',name:'Грунт',unit:'мл',qty:b.primer??50},{id:'paint',name:'Краска',unit:'мл',qty:b.paint??50}];delete d.bom}
 d.users=(d.users||[]).map(u=>({login:u.login||u.name,name:u.name||u.login,pw:u.pw,admin:!!u.admin,disabled:!!u.disabled}));d.stock=d.stock||{};d.thr=d.thr||{};d.orders=d.orders||[];d.log=d.log||[];d.shared=d.shared||[];return d}
-function needsMig(d){if(!d||!d.types||!d.types.length)return false;if(!d.schema||d.schema<6)return true;if(!['cma12','cma15','cma20'].every(id=>(d.shared||[]).some(p=>p.id===id)))return true;if(!d.vbom||!d.vbom.horn||d.vbom.horn.qty!==1||!d.vbom.blank)return true;
+function needsMig(d){if(!d||!d.types||!d.types.length)return false;if(!d.schema||d.schema<7)return true;const cma=(d.shared||[]).find(p=>p.id==='cma');if(cma&&+cma.qty!==0)return true;if(!['cma12','cma15','cma20'].every(id=>(d.shared||[]).some(p=>p.id===id)))return true;if(!d.vbom||!d.vbom.horn||d.vbom.horn.qty!==1||!d.vbom.blank)return true;
  if(d.shared.some(p=>p.id==='bush'))return true;if(!d.shared.some(p=>p.id==='cap'))return true;
  if(d.types.some(t=>(t.parts||[]).some(p=>p.id==='cap'||p.id==='horn'||p.id==='cup')))return true;
  if(Object.keys(d.stock||{}).some(k=>{const p=k.split('|');return (p.length===4&&p[3]==='cup')||(p.length===2&&p[1]==='cap')}))return true;
@@ -139,6 +139,15 @@ function migrateV6(d){const notes=[];
  notes.push('Сварка по типу ГГц+дБи (без разъёмов): отправили N рупоров → −2N частей, на сварке +N; приняли M → со сварки −M, рупоры +M. Неполный возврат оставляется «на сварке».');
  notes.push('В общих комплектующих — сворачиваемый список всех частей рупора и ожидаемых поставок. Остатки склада не затирались.');
  d.schema=6;return{notes:[...new Set(notes)]}}
+function migrateV7(d){const notes=[];
+ if(!d.schema||d.schema<6){const r=migrateV6(d);notes.push(...r.notes)}
+ if(!['cma12','cma15','cma20'].every(id=>(d.shared||[]).some(p=>p.id===id))){const r=migrateV5(d);notes.push(...r.notes)}
+ const cma=(d.shared||[]).find(p=>p.id==='cma');
+ if(cma){if(+cma.qty!==0)notes.push('«CMA разъём» больше не списывается заказом (норма 0). Остаток на складе не менялся: '+(d.stock&&d.stock.cma!=null?d.stock.cma+' шт':'как был')+'.');
+  cma.qty=0;cma.name=cma.name||'CMA разъём'}
+ else notes.push('Старый «CMA разъём» в списке не найден — не добавлялся.');
+ notes.push('Списание разъёмов: CMA 20 — только 3-4 ГГц; CMA 15 — только 5-6 ГГц; CMA 12 — остальные диапазоны (4-5, 6-7, 7-8, 8-9). Количество = число разъёмов варианта (1 или 2). Старые заказы не пересчитывались.');
+ d.schema=7;return{notes:[...new Set(notes)]}}
 function runMigrations(d){migrate(d);const notes=[];
  if(!d.schema||d.schema<2){const r=migrateV2(d);notes.push(...r.notes)}
  if(!d.schema||d.schema<3){const r=migrateV3(d);notes.push(...r.notes)}
@@ -147,10 +156,19 @@ function runMigrations(d){migrate(d);const notes=[];
  if(!d.schema||d.schema<5||!['cma12','cma15','cma20'].every(id=>(d.shared||[]).some(p=>p.id===id))){
   const r=migrateV5(d);notes.push(...r.notes)}
  if(!d.schema||d.schema<6){const r=migrateV6(d);notes.push(...r.notes)}
+ if(!d.schema||d.schema<7||((d.shared||[]).some(p=>p.id==='cma'&&+p.qty!==0))){const r=migrateV7(d);notes.push(...r.notes)}
  return{notes:[...new Set(notes)]}}
 const uid=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
-function sharedQty(p,conn){if(p.id==='cma')return +conn;if(p.id==='cap')return +conn===1?1:0;return +p.qty||0}
-function sharedQtyHint(p){if(p.id==='cma')return '=число разъёмов';if(p.id==='cap')return '1 при 1 разъёме, 0 при 2';return 'на 1 ант.: '+p.qty}
+function cmaPartFor(typeId,d){const t=((d&&d.types)||(typeof D!=='undefined'&&D&&D.types)||[]).find(x=>x.id===typeId)||{id:typeId,name:String(typeId||'')};
+ if(t.id==='3-4')return 'cma20';if(t.id==='5-6')return 'cma15';
+ const g=ghz(t);if(g===3)return 'cma20';if(g===5)return 'cma15';return 'cma12'}
+function sharedLocked(p){return !!p&&['cma','cap','cma12','cma15','cma20'].includes(p.id)}
+function sharedQty(p,conn,typeId,d){if(p.id==='cma')return 0;if(p.id==='cap')return +conn===1?1:0;
+ if(p.id==='cma12'||p.id==='cma15'||p.id==='cma20')return cmaPartFor(typeId,d)===p.id?(+conn||0):0;
+ return +p.qty||0}
+function sharedQtyHint(p){if(p.id==='cma')return 'не списывается (заменён на CMA 12/15/20)';if(p.id==='cap')return '1 при 1 разъёме, 0 при 2';
+ if(p.id==='cma20')return '=число разъёмов, только 3-4 ГГц';if(p.id==='cma15')return '=число разъёмов, только 5-6 ГГц';
+ if(p.id==='cma12')return '=число разъёмов, остальные диапазоны (4-5, 6-7, 7-8, 8-9)';return 'на 1 ант.: '+p.qty}
 function parseVariant(l){if(typeof l==='string'){const p=l.split('|');return{typeId:p[0],dbi:+p[1],conn:+p[2]}}
  if(l.variant){const p=String(l.variant).split('|');return{typeId:p[0],dbi:+p[1],conn:+p[2]}}
  return{typeId:l.type,dbi:+l.dbi||14,conn:+l.conn||1}}
@@ -223,7 +241,7 @@ function requirements(d,lines){const r={};const vb=d.vbom||{horn:{qty:1},cup:{qt
   const hk=typeId+'|'+dbi+'|horn';r[hk]=(r[hk]||0)+(vb.horn?.qty??1)*q;
   const ck=typeId+'|'+conn+'|cup';r[ck]=(r[ck]||0)+(vb.cup?.qty??1)*q;
   (t.parts||[]).forEach(p=>{const k=typeId+'|'+p.id;r[k]=(r[k]||0)+(+p.qty||0)*q});
-  (d.shared||[]).forEach(p=>{const sq=sharedQty(p,conn);if(sq>0)r[p.id]=(r[p.id]||0)+sq*q})});
+  (d.shared||[]).forEach(p=>{const sq=sharedQty(p,conn,typeId,d);if(sq>0)r[p.id]=(r[p.id]||0)+sq*q})});
  return Object.keys(r).filter(k=>r[k]>0).map(k=>({key:k,need:r[k],have:d.stock[k]||0,short:Math.max(0,r[k]-(d.stock[k]||0))}))}
 function placeOrder(d,lines,user,meta){meta=meta||{};const req=requirements(d,lines);if(!req.length)throw Error('Пустой заказ');
  if(!meta.clientId&&!meta.clientName)throw Error('Выберите клиента');if(!meta.deadline)throw Error('Укажите срок');
@@ -291,7 +309,7 @@ async function login(){try{await FB.login($('#un').value,$('#pw').value)}catch(e
 async function bootstrap(){const n=$('#un').value.trim(),p=$('#pw').value;if(!n||p.length<6){bad('Логин и пароль (мин. 6 символов)');return render()}try{await FB.bootstrap(n,p)}catch(e){bad(FB.err(e));render()}}
 function logout(){FB.logout()}
 function migBanner(){let html='';
- if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада → схема 6</b><br>${(!D.schema||D.schema<5)?'Также выполнятся предыдущие шаги (CMA 12/15/20, рупор ×1, заготовки, сиды сварки). ':''}Заказ списывает только 1 готовый рупор; части рупора хранятся отдельно. Сварка — по типу ГГц+дБи (без разъёмов): N рупоров → −2N частей, на сварке +N; приёмка M → со сварки −M, рупоры +M (неполный возврат остаётся на сварке). Старые остатки у партнёров объединяются по типу, остатки склада не затираются. В «Общих» появится сворачиваемый список всех частей и ожидаемых поставок. Идемпотентно.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему и сиды</button></div></div>`;
+ if(me().admin&&needsMig(D))html+=`<div class="msg w"><b>Обновление склада → схема 7</b><br>${(!D.schema||D.schema<6)?'Также выполнятся предыдущие шаги (сварка, заготовки, CMA 12/15/20 как позиции). ':''}Списание разъёмов: «CMA разъём 20» — только 3-4 ГГц; «CMA разъём 15» — только 5-6 ГГц; «CMA разъём 12» — остальные диапазоны. Количество = число разъёмов (1 или 2). Старый «CMA разъём» больше не списывается (норма 0), позиция и остаток сохраняются. Уже оформленные заказы не пересчитываются. Остатки склада не затираются. Идемпотентно.<div class="line" style="margin-top:8px"><button class="p" onclick="doSchemaMig()">Обновить схему и сиды</button></div></div>`;
  else if(!me().admin&&needsMig(D))html+=`<div class="msg w">Администратор должен обновить структуру склада. Новые заказы временно недоступны.</div>`;
  if(D._migNotes&&D._migNotes.length)html+=`<div class="msg" style="background:#24401a"><b>Миграция выполнена</b><ul style="margin:6px 0 0;padding-left:18px">${D._migNotes.map(n=>'<li>'+esc(n)+'</li>').join('')}</ul><button onclick="D._migNotes=null;render()" style="margin-top:8px">Скрыть</button></div>`;
  if(me().admin&&D.inventoryApplied!=='2026-11-09')html+=`<div class="msg w"><b>Применить инвентарь 09.11.2026</b><br>Запишет остатки стаканов и рупоров для 5–9 ГГц по таблице (общие детали, 3–4/4–5 ГГц и заглушку не трогает). Каждое изменение — в лог как корректировка.<div class="line" style="margin-top:8px"><button class="p" onclick="doInvApply(false)">Применить инвентарь</button></div></div>`;
@@ -442,10 +460,10 @@ ${t?`<div class="line"><input value="${esc(t.name)}" onchange="if(this.value.tri
 <label class="small">дБи через запятую</label><input value="${(t.dbis||[]).join(',')}" onchange="setDbis('${tid}',this.value)">
 <label class="small">Число разъёмов через запятую</label><input value="${(t.conns||[]).join(',')}" onchange="setConns('${tid}',this.value)">
 <p class="small">Рупор: ГГц+дБи (×${D.vbom?.horn?.qty??1}). Заготовка: ГГц+дБи (2 шт = 1 рупор на сварку). Стакан: ГГц+разъёмы (×${D.vbom?.cup?.qty??1}).</p>
-<h3>Детали на весь ${esc(t.name)}</h3>`:'<p class="small">Общие детали. CMA = число разъёмов; Заглушка = 1 при 1 разъёме, 0 при 2. CMA 12/15/20 — расход на антенну задаётся здесь (сейчас 0, списание позже).</p>'}
-<table><tr><th>Деталь</th><th>Ед.</th><th>На 1</th><th>Мин.</th><th></th></tr>${parts.map(p=>{const k=tid?tid+'|'+p.id:p.id;const qtyShow=(!tid&&(p.id==='cma'||p.id==='cap'))?sharedQtyHint(p):p.qty;
+<h3>Детали на весь ${esc(t.name)}</h3>`:'<p class="small">Общие детали. CMA 20 = число разъёмов, только 3-4 ГГц; CMA 15 — только 5-6 ГГц; CMA 12 — остальные диапазоны. Старый «CMA разъём» не списывается (остаток сохранён). Заглушка = 1 при 1 разъёме, 0 при 2.</p>'}
+<table><tr><th>Деталь</th><th>Ед.</th><th>На 1</th><th>Мин.</th><th></th></tr>${parts.map(p=>{const k=tid?tid+'|'+p.id:p.id;const qtyShow=(!tid&&sharedLocked(p))?sharedQtyHint(p):p.qty;
  return`<tr><td><input style="margin:0" value="${esc(p.name)}" onchange="pSet('${tid}','${p.id}','name',this.value)"></td><td><input style="margin:0;width:56px" value="${esc(p.unit)}" onchange="pSet('${tid}','${p.id}','unit',this.value)"></td>
-<td>${(!tid&&(p.id==='cma'||p.id==='cap'))?`<span class="small">${esc(qtyShow)}</span>`:`<input style="margin:0;width:64px" type="number" value="${p.qty}" onchange="pSet('${tid}','${p.id}','qty',this.value)">`}</td>
+<td>${(!tid&&sharedLocked(p))?`<span class="small">${esc(qtyShow)}</span>`:`<input style="margin:0;width:64px" type="number" value="${p.qty}" onchange="pSet('${tid}','${p.id}','qty',this.value)">`}</td>
 <td><input style="margin:0;width:64px" type="number" value="${D.thr[k]||0}" onchange="if(+this.value>=0){D.thr['${k}']=+this.value;saveCfg()}"></td><td><button class="d" onclick="pDel('${tid}','${p.id}')">✕</button></td></tr>`}).join('')}</table>
 <form onsubmit="pAdd('${tid}');return false"><h3>Новая деталь ${t?'для '+esc(t.name):'(общая)'}</h3><input id="pn" placeholder="Название" required><div class="line"><input id="pu" placeholder="Ед. (шт/мл)" value="шт"><input id="pq" type="number" placeholder="На 1 антенну" required><input id="pt" type="number" placeholder="Мин." value="0"></div><button class="p btn-w" type="submit">Добавить деталь</button></form>
 ${t?'':`<h3>Нормы рупора / стакана</h3><div class="line"><label class="small">Рупор ×<input type="number" style="margin:0" value="${D.vbom?.horn?.qty??1}" onchange="D.vbom=D.vbom||{};D.vbom.horn=D.vbom.horn||{name:'Рупор',unit:'шт'};D.vbom.horn.qty=+this.value||1;D.vbom.horn.name='Рупор';saveCfg()"></label>
